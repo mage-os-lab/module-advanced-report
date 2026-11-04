@@ -49,17 +49,58 @@ final class XsdValidatorTest extends TestCase
         self::assertStringStartsWith('Line 3:', $errors[0]);
     }
 
+    public function testDatasetFileWithMarketingAreaValidatesAgainstFileSchema(): void
+    {
+        $errors = $this->validateXml('<config><dataset code="a" label="A" acl="MageOS_AdvancedReport::marketing" area="marketing"/></config>');
+
+        self::assertSame([], $errors);
+    }
+
+    public function testMergedDefinitionWithMarketingAreaValidatesAgainstMergedSchema(): void
+    {
+        $errors = $this->validateXml(
+            '<config><dataset code="a" label="A" acl="MageOS_AdvancedReport::marketing" area="marketing"/></config>',
+            self::ETC . '/report_datasets.xsd'
+        );
+
+        self::assertSame([], $errors);
+    }
+
+    public function testUnknownAreaIsStillRejectedBySchema(): void
+    {
+        foreach ([self::ETC . '/report_datasets_file.xsd', self::ETC . '/report_datasets.xsd'] as $xsd) {
+            $errors = $this->validateXml('<config><dataset code="a" label="A" acl="MageOS_AdvancedReport::marketing" area="bogus"/></config>', $xsd);
+
+            self::assertCount(1, $errors);
+            self::assertStringContainsString('area', $errors[0]);
+        }
+    }
+
+    public function testAclDeclaresMarketingResourceUnderAdvancedReport(): void
+    {
+        $acl = simplexml_load_file(self::ETC . '/acl.xml');
+        self::assertNotFalse($acl);
+        $nodes = $acl->xpath(
+            '//resource[@id="MageOS_AdvancedReport::reports"]/resource[@id="MageOS_AdvancedReport::marketing"]'
+        );
+
+        self::assertIsArray($nodes);
+        self::assertCount(1, $nodes);
+        self::assertSame('Marketing', (string)$nodes[0]['title']);
+        self::assertSame('28', (string)$nodes[0]['sortOrder']);
+    }
+
     /**
      * @return list<string>
      */
-    private function validateXml(string $xml): array
+    private function validateXml(string $xml, string $xsd = self::ETC . '/report_datasets_file.xsd'): array
     {
         $path = tempnam(sys_get_temp_dir(), 'xsd');
         self::assertIsString($path);
         file_put_contents($path, $xml);
 
         try {
-            return (new XsdValidator())->validateFile($path, self::ETC . '/report_datasets_file.xsd');
+            return (new XsdValidator())->validateFile($path, $xsd);
         } finally {
             unlink($path);
         }

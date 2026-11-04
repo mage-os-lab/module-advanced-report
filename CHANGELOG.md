@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Marketing area**: new `marketing` dataset area and ACL resource `MageOS_AdvancedReport::marketing`, used by add-on modules such as `MageOS_GoogleAdvancedReport` (Google Analytics 4 import)
+
 ## [1.0.0] - 2026-11-04
 
 ### Added

@@ -10,9 +10,9 @@ namespace MageOS\AdvancedReport\Model\Definition;
  */
 final readonly class Preset
 {
-    const string CHART_LINE = 'line';
-    const string CHART_HORIZONTAL_BAR = 'horizontalBar';
-    const array CHART_TYPES = ['line', 'bar', 'horizontalBar', 'doughnut', 'pie'];
+    public const string CHART_LINE = 'line';
+    public const string CHART_HORIZONTAL_BAR = 'horizontalBar';
+    public const array CHART_TYPES = ['line', 'bar', 'horizontalBar', 'doughnut', 'pie'];
 
     /**
      * @param string $code

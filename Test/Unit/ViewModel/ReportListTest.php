@@ -235,6 +235,34 @@ final class ReportListTest extends TestCase
         self::assertArrayNotHasKey('customers', $areas);
     }
 
+    public function testReportListLabelsMarketingAreaAndDescribesIt(): void
+    {
+        $areas = $this->build(
+            [$this->preset('m', 'marketing', 'ga_traffic')],
+            [],
+            ['MageOS_AdvancedReport::marketing'],
+        )->getAreas();
+
+        self::assertSame('Marketing', (string)$areas['marketing']['label']);
+        self::assertSame(
+            'Ready-made marketing reports: traffic acquisition, landing pages, devices, e-commerce funnel '
+            . 'and product performance from Google Analytics.',
+            (string)$areas['marketing']['description'],
+        );
+    }
+
+    public function testReportListHidesMarketingAreaWhenNoMarketingPresetIsVisible(): void
+    {
+        $areas = $this->build(
+            [$this->preset('m', 'marketing', 'ga_traffic'), $this->preset('s', 'sales', 'sales_orders')],
+            [],
+            ['MageOS_AdvancedReport::sales'],
+        )->getAreas();
+
+        self::assertArrayNotHasKey('marketing', $areas);
+        self::assertArrayHasKey('sales', $areas);
+    }
+
     /**
      * @param Preset[] $presets
      * @param SavedReportInterface[] $saved
@@ -255,9 +283,10 @@ final class ReportListTest extends TestCase
             'catalog_stock' => 'MageOS_AdvancedReport::catalog',
             'customer_orders' => 'MageOS_AdvancedReport::customers',
             'quote_carts' => 'MageOS_AdvancedReport::carts',
+            'ga_traffic' => 'MageOS_AdvancedReport::marketing',
         ];
         $areaOf = ['sales_orders' => 'sales', 'sales_items' => 'catalog', 'catalog_stock' => 'catalog',
-            'customer_orders' => 'customers', 'quote_carts' => 'carts'];
+            'customer_orders' => 'customers', 'quote_carts' => 'carts', 'ga_traffic' => 'marketing'];
         $registry = $this->createStub(DefinitionRegistry::class);
         $registry->method('getPresets')->willReturn($presets);
         $registry->method('getDataset')->willReturnCallback(
