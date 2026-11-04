@@ -647,8 +647,7 @@ rules described above (no SQL in metrics, bound parameters only) and include uni
 
 ## License
 
-This module is licensed under the [Open Software License 3.0](https://opensource.org/licenses/OSL-3.0) and the
-[Academic Free License 3.0](https://opensource.org/licenses/AFL-3.0).
+This module is licensed under the [MIT License](LICENSE).
 
 ## Support
 

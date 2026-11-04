@@ -3,8 +3,7 @@
     "description": "Advanced sales and catalog reporting for Magento Open Source / Mage-OS.",
     "type": "magento2-module",
     "license": [
-        "OSL-3.0",
-        "AFL-3.0"
+        "MIT"
     ],
     "config": {
         "sort-packages": true,
