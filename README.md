@@ -8,7 +8,8 @@ metrics and dimensions are declared in XML and translated to SQL by a MySQL data
 
 - Predefined reports (sales overview, sales by payment/shipping method/country/customer group/hour/weekday,
   new vs returning customers, coupon performance, product performance, sales by category/attribute,
-  customer value, new customer registrations, stock value, low stock with coverage, dead stock, never sold).
+  customer value, new customer registrations, stock value, low stock with coverage, dead stock, never sold,
+  most refunded products, top search terms, searches without results).
 - Free exploration: pick metrics, group by dimensions, filter, compare to the previous period/year,
   chart and table, CSV export.
 - Saved reports (private or shared with other admins) stored in `mageos_advancedreport_saved`.

@@ -511,6 +511,9 @@
         <metric code="return_rate" label="Return rate" format="percent" formula="returns / gross_sales"
                 lowerIsBetter="true"
                 description="Returns as a percentage of gross sales. A lower value is an improvement."/>
+        <metric code="refund_rate" label="Refund rate (units)" format="percent"
+                formula="units_refunded / units_sold" lowerIsBetter="true"
+                description="Units refunded as a percentage of units sold. A lower value is an improvement."/>
         <metric code="shipments" label="Shipments" format="integer" aggregate="sum" field="shipment_count"
                 description="Number of shipments containing the product. Limitation: shipments are attributed to the original order date, not the shipment date."/>
         <metric code="credit_memos" label="Credit memos" format="integer" aggregate="sum" field="credit_memo_count"
@@ -886,6 +889,58 @@
                    labelResolver="MageOS\AdvancedReport\Model\Label\CategoryLabelResolver"/>
     </dataset>
 
+    <!--
+        Internal search terms. search_query keeps ONE row per term and store with a cumulative "popularity" counter,
+        and updated_at is the last time the term was searched. The period filter therefore selects the terms LAST
+        searched in the period, and their searches are the lifetime count: it is not a per-day count of searches.
+    -->
+    <dataset code="search_terms" label="Search terms" acl="MageOS_AdvancedReport::catalog" area="catalog">
+        <source name="mysql" table="search_query" alias="main"/>
+
+        <!-- Reserved fields (drive date filtering/bucketing and store scope). -->
+        <field code="created_at" label="Last searched at" type="date">
+            <mysql expression="main.updated_at"/>
+        </field>
+        <field code="store_id" label="Store" type="id">
+            <mysql expression="main.store_id"/>
+        </field>
+
+        <field code="query_id" label="Term ID" type="id">
+            <mysql expression="main.query_id"/>
+        </field>
+        <field code="query_text" label="Search term" type="string">
+            <mysql expression="LOWER(TRIM(main.query_text))"/>
+        </field>
+        <field code="popularity" label="Searches" type="integer">
+            <mysql expression="main.popularity"/>
+        </field>
+        <field code="num_results" label="Results found" type="integer">
+            <mysql expression="main.num_results"/>
+        </field>
+        <field code="has_no_results" label="Has no results" type="boolean">
+            <mysql expression="(main.num_results = 0)"/>
+        </field>
+
+        <metric code="searches" label="Searches" format="integer" aggregate="sum" field="popularity"
+                description="Times the terms were searched (lifetime counter of each term)."/>
+        <metric code="distinct_terms" label="Distinct terms" format="integer" aggregate="count" field="query_id"
+                description="Number of distinct search terms."/>
+        <metric code="searches_no_results" label="Searches without results" format="integer" aggregate="sum"
+                field="popularity" condition="has_no_results" lowerIsBetter="true"
+                description="Searches of the terms that returned no results. A lower value is an improvement."/>
+        <metric code="no_results_rate" label="Searches without results (%)" format="percent"
+                formula="searches_no_results / searches" lowerIsBetter="true"
+                description="Share of searches that returned no results. A lower value is an improvement."/>
+        <metric code="avg_results" label="Average results per term" format="number" aggregate="avg" field="num_results"
+                description="Average number of results the terms returned at their last search."/>
+
+        <dimension code="search_term" label="Search term" field="query_text"/>
+        <dimension code="store_id" label="Store" field="store_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\StoreLabelResolver"/>
+        <dimension code="last_searched" label="Last searched" field="created_at"
+                   granularities="day,week,month,year"/>
+    </dataset>
+
     <!-- Sales presets (area sales, dataset sales_orders). -->
     <preset code="sales_overview" area="sales" dataset="sales_orders" label="Sales overview" description="Orders, revenue, discounts and average order value over time, compared with the previous period." dateRange="last_30_days" compareTo="previous_period" sources="mysql">
         <metric code="orders"/>
@@ -1019,6 +1074,30 @@
         <metric code="stock_value_cost"/>
         <dimension code="sku"/>
         <sort by="stock_value_cost" direction="desc"/>
+    </preset>
+
+    <preset code="most_refunded_products" area="catalog" dataset="sales_items" label="Most refunded products" description="Products with the most refunded units, with the refunded amount and the share of units sold." dateRange="last_30_days" sources="mysql" alternateDimension="sku">
+        <metric code="units_refunded"/>
+        <metric code="returns"/>
+        <metric code="units_sold"/>
+        <metric code="refund_rate"/>
+        <dimension code="parent_sku"/>
+        <filter field="qty_refunded_qty" operator="gte" value="0.0001"/>
+        <sort by="units_refunded" direction="desc"/>
+    </preset>
+
+    <preset code="top_search_terms" area="catalog" dataset="search_terms" label="Top search terms" description="Most searched terms, with the number of results they return." dateRange="year_to_date" sources="mysql">
+        <metric code="searches"/>
+        <metric code="avg_results"/>
+        <dimension code="search_term"/>
+        <sort by="searches" direction="desc"/>
+    </preset>
+
+    <preset code="search_terms_no_results" area="catalog" dataset="search_terms" label="Searches without results" description="Terms customers looked for and did not find: the catalog or synonym gaps to fix first." dateRange="year_to_date" sources="mysql">
+        <metric code="searches"/>
+        <dimension code="search_term"/>
+        <filter field="has_no_results" operator="eq" value="1"/>
+        <sort by="searches" direction="desc"/>
     </preset>
 
     <!-- Customer presets (area customers). -->
