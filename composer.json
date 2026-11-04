@@ -21,12 +21,15 @@
         "magento/module-directory": "*",
         "magento/module-payment": "*",
         "magento/module-shipping": "*",
-        "magento/module-ui": "*"
+        "magento/module-ui": "*",
+        "magento/module-config": "*"
     },
     "suggest": {
         "magento/module-checkout": "Provides the checkout/cart/delete_quote_after setting read by the cart reports; the default is used when it is not installed.",
-        "magento/module-inventory-api": "Used to read multi-source stock levels for the catalog_stock dataset when MSI is enabled.",
-        "magento/module-open-search": "Used as an alternative reporting data source when OpenSearch is enabled."
+        "magento/module-inventory-api": "Used to read multi-source stock levels for the catalog_stock dataset and, with the modules below, to enable the catalog_salable dataset.",
+        "magento/module-inventory-catalog": "Required by the catalog_salable dataset.",
+        "magento/module-inventory-indexer": "Required by the catalog_salable dataset.",
+        "magento/module-inventory-reservations": "Required by the catalog_salable dataset."
     },
     "autoload": {
         "files": [
