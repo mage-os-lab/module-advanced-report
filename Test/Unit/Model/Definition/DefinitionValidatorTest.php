@@ -391,8 +391,8 @@ final class DefinitionValidatorTest extends TestCase
     }
 
     /**
-     * @return void
      * @throws InvalidDefinitionException
+     * @return void
      */
     public function testItReportsAPresetChartMetricNotDeclaredOnTheDataset(): void
     {
