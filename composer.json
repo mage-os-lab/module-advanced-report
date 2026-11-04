@@ -3,8 +3,13 @@
     "description": "Advanced sales and catalog reporting for Magento Open Source / Mage-OS.",
     "type": "magento2-module",
     "license": [
-        "OSL-3.0",
-        "AFL-3.0"
+        "MIT"
+    ],
+    "authors": [
+        {
+            "name": "Luca Fuser",
+            "email": "fuse94@libero.it",
+        }
     ],
     "config": {
         "sort-packages": true,
@@ -30,12 +35,15 @@
         "magento/module-directory": "*",
         "magento/module-payment": "*",
         "magento/module-shipping": "*",
-        "magento/module-ui": "*"
+        "magento/module-ui": "*",
+        "magento/module-config": "*"
     },
     "suggest": {
         "magento/module-checkout": "Provides the checkout/cart/delete_quote_after setting read by the cart reports; the default is used when it is not installed.",
-        "magento/module-inventory-api": "Used to read multi-source stock levels for the catalog_stock dataset when MSI is enabled.",
-        "magento/module-open-search": "Used as an alternative reporting data source when OpenSearch is enabled."
+        "magento/module-inventory-api": "Used to read multi-source stock levels for the catalog_stock dataset and, with the modules below, to enable the catalog_salable dataset.",
+        "magento/module-inventory-catalog": "Required by the catalog_salable dataset.",
+        "magento/module-inventory-indexer": "Required by the catalog_salable dataset.",
+        "magento/module-inventory-reservations": "Required by the catalog_salable dataset."
     },
     "require-dev": {
         "bitexpert/phpstan-magento": "^0.44",
@@ -55,12 +63,16 @@
             "MageOS\\AdvancedReport\\": ""
         }
     },
-    "repositories": [
-        {
+    "repositories": {
+        "mage-os-mirror": {
             "type": "composer",
             "url": "https://mirror.mage-os.org/"
+        },
+        "mage-os": {
+            "type": "composer",
+            "url": "https://repo.mage-os.org/"
         }
-    ],
+    },
     "scripts": {
         "test:unit": "phpunit -c phpunit.xml.dist --testsuite unit",
         "test:phpstan": "phpstan analyse --memory-limit=1G",

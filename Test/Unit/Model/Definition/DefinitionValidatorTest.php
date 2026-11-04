@@ -619,7 +619,7 @@ final class DefinitionValidatorTest extends TestCase
      * @param array<int,array{code:string,granularity:Granularity|null}> $dimensions
      * @param array<int,array{field:string,operator:FilterOperator,value:mixed}> $filters
      * @param array<int,array{metric:string,direction:string}> $sort
-     * @param array<string,mixed>|null $chart
+     * @param array{type:string|null,metrics:string[],dimensions:array<int,array{code:string,granularity:string|null}>,sortBy:string|null,sortDirection:string|null}|null $chart
      */
     private static function preset(
         string $code = 'sales_overview',

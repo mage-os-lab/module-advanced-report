@@ -13,6 +13,12 @@ metrics and dimensions are declared in XML and translated to SQL by a MySQL data
 - Free exploration: pick metrics, group by dimensions, filter, compare to the previous period/year,
   chart and table, CSV export. Each preset declares its default chart; the chart type can be changed from the chart
   card for the current page.
+  recent carts and cart items, abandoned carts (trend, list, top products), products added to cart, cart conversion).
+- Free exploration: pick metrics, group by dimensions, filter, compare to the previous period/year,
+  chart and table, CSV export. Each preset declares its default chart; the chart type can be changed from the chart
+  card for the current page.
+- A `marketing` area (ACL `MageOS_AdvancedReport::marketing`) that stays empty until a source module such as
+  `MageOS_GoogleAdvancedReport` (Google Analytics 4 import) contributes datasets and presets to it.
 - Saved reports (private or shared with other admins) stored in `mageos_advancedreport_saved`.
 - Everything is computed live from the native Magento tables (no aggregation tables, no cron).
 
@@ -25,7 +31,7 @@ Reports are not hard-coded queries. Every report is a combination of a few build
 
 | Concept | What it is | Example |
 |---|---|---|
-| **Dataset** | A reportable entity with one row per record: its base table (or a base select provider), the ACL resource that protects it, the area it belongs to (`sales`, `catalog`, `customers`) and the implicit filters always applied to it. | `sales_orders` (one row per order), `sales_items` (one row per top-level order item), `customer_orders`, `customers`, `catalog_stock`, `catalog_salable` (MSI only). |
+| **Dataset** | A reportable entity with one row per record: its base table (or a base select provider), the ACL resource that protects it, the area it belongs to (`sales`, `catalog`, `customers`, `carts`, `marketing`) and the implicit filters always applied to it. | `sales_orders` (one row per order), `sales_items` (one row per top-level order item), `customer_orders`, `customers`, `catalog_stock`, `catalog_salable` (MSI only), `carts`, `cart_items`. |
 | **Field** | A named, typed SQL expression on the dataset rows (`money`, `integer`, `decimal`, `boolean`, `string`, `id`, `date`). It may need one or more joins. Every field can be used as a filter. | `gross_sales_amount` = subtotal minus canceled subtotal; `billing_country` = billing address country (needs the `billing_address` join). |
 | **Join** | A table joined to the dataset, declared once and added to the query only when a selected field needs it. A join can `require` another join. | `payment`, `billing_address`, `store`. |
 | **Metric** | A number to measure. Either an **aggregate** (`sum`, `count`, `count_distinct`, `min`, `max`, `avg`) of a field, optionally restricted to the rows where a boolean field is true (`condition`), or a **formula** over other metrics (`+ - * /`, parentheses, numbers). | `orders` = `COUNT(order_id)`; `net_sales` = `gross_sales - discounts - returns`; `aov` = `net_sales / orders`. |
@@ -84,8 +90,8 @@ bin/magento cache:flush
 ```
 
 `setup:upgrade` creates the `mageos_advancedreport_saved` table and adds native indexes required by the reports:
-`sales_order (customer_id, created_at)`, `sales_order (customer_email, created_at)`, `sales_order_item (product_id)` and
-`sales_order_item (product_id, order_id)`. The build is online (`ALGORITHM=INPLACE, LOCK=NONE`, writes continue) but costs
+`sales_order (customer_id, created_at)`, `sales_order (customer_email, created_at)`, `sales_order_item (product_id)`,
+`sales_order_item (product_id, order_id)` and `quote (updated_at)`. The build is online (`ALGORITHM=INPLACE, LOCK=NONE`, writes continue) but costs
 I/O, temporary sort space and replica lag that grow with the table size: on a store with a large `sales_order` table run
 the upgrade outside peak traffic (maintenance window recommended) and measure first with `dev/benchmark/index-timing.sql`
 (see [indexes](docs/indexes.md#installation-time-and-maintenance-window), risk R42).
@@ -378,7 +384,7 @@ Attribute reference:
 
 | Element | Attributes |
 |---|---|
-| `dataset` | `code`; for a new dataset also `label`, `acl` (ACL resource checked by the data endpoint), `area` (`sales`, `catalog`, `customers`), optional `dateless="true"` for snapshot datasets without `created_at`. Children: `<source name="mysql" table="..." alias="main"/>` (or `provider="..."`), `<implicitFilter code="counted_status"/>`, joins, fields, metrics, dimensions. |
+| `dataset` | `code`; for a new dataset also `label`, `acl` (ACL resource checked by the data endpoint), `area` (`sales`, `catalog`, `customers`, `carts`, `marketing`), optional `dateless="true"` for snapshot datasets without `created_at`. Children: `<source name="mysql" table="..." alias="main"/>` (or `provider="..."`), `<implicitFilter code="counted_status"/>`, joins, fields, metrics, dimensions. |
 | `join` | `code`, `table`, `alias`, `condition`, optional `type` (`left` default, `inner`) and `requires` (comma-separated join codes this join depends on) and `cardinality` (`one` default, `many` for one-to-many joins that can multiply rows and inflate aggregates). |
 | `field` | `code`, `label`, `type` (`money`, `integer`, `decimal`, `boolean`, `string`, `id`, `date`), optional `description`. Child `<mysql expression="..." joins="a,b"/>` or `<mysql expressionProvider="name"/>`. |
 | `metric` | `code`, `label`, `format` (`money`, `number`, `percent`, `integer`), `description`, `lowerIsBetter` (colours the comparison delta), `hidden` (formula helper not shown in the picker). Either `aggregate` (`sum`, `count`, `count_distinct`, `min`, `max`, `avg`) + `field` + optional `condition` (a boolean field), or `formula`, or `virtual="true"` (value supplied by a preset query). |
@@ -575,7 +581,7 @@ pagination does not reduce the database work. Details live in three documents:
 In short:
 
 - **Indexes**: `setup:upgrade` adds `sales_order (customer_id, created_at)`, `sales_order (customer_email, created_at)`,
-  `sales_order_item (product_id)` and `sales_order_item (product_id, order_id)`; date filters use the native indexes. Check
+  `sales_order_item (product_id)`, `sales_order_item (product_id, order_id)` and `quote (updated_at)`; date filters use the native indexes. Check
   index usage with `advanced-report:explain` on production-size data.
 - **Result cache**: the `advanced_report` cache type, TTL-only freshness: periods including today expire after
   `cache_ttl_open_period` (5 minutes), all others (and reports without a date range, such as stock) after
@@ -596,7 +602,7 @@ In short:
 
 ## Security and permissions
 
-Access is enforced server-side: a dataset needs its module ACL (`sales`, `catalog`, `customers`, `carts`) **and** the core ACL of
+Access is enforced server-side: a dataset needs its module ACL (`sales`, `catalog`, `customers`, `carts`, `marketing`) **and** the core ACL of
 its entity. Full functionality needs these core resources:
 
 - `Magento_Sales::sales_order` (`sales_orders`, `customer_orders`, `sales_items`)
@@ -604,6 +610,7 @@ its entity. Full functionality needs these core resources:
 - `Magento_Catalog::products` (`catalog_stock`)
 - `Magento_InventoryApi::stock` (`catalog_salable`, MSI only)
 - `Magento_Reports::abandoned` **and** `Magento_Sales::sales_order` (`carts`, `cart_items`; module ACL `MageOS_AdvancedReport::carts`). The cart datasets list customer emails.
+- `MageOS_AdvancedReport::marketing` (area `marketing`): datasets contributed by add-on modules such as `MageOS_GoogleAdvancedReport`, which declare their own core ACL (for example `Magento_Sales::sales_order` for the GA4 reconciliation).
 
 `dead_stock` and `never_sold` also need the `sales_items` permission (they read order items). Birth date and gender fields need `Magento_Sales::actions_view` on the order datasets and `Magento_Customer::manage` on `customers` (field level ACL). An owner who lost a dataset permission can still delete their own saved report.
 
@@ -648,8 +655,7 @@ rules described above (no SQL in metrics, bound parameters only) and include uni
 
 ## License
 
-This module is licensed under the [Open Software License 3.0](https://opensource.org/licenses/OSL-3.0) and the
-[Academic Free License 3.0](https://opensource.org/licenses/AFL-3.0).
+This module is licensed under the [MIT License](LICENSE).
 
 ## Support
 

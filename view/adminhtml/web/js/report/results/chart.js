@@ -58,14 +58,16 @@ define([
                 return !!preset && dimensionKeys(app.state().dimensions) === dimensionKeys(preset.defaultDimensions);
             }),
             needsOwnRequest = ko.pureComputed(function () {
-                return usesPresetChart() && dimensionKeys(preset.dimensions) !== dimensionKeys(preset.defaultDimensions);
+                return usesPresetChart() &&
+                    dimensionKeys(preset.dimensions) !== dimensionKeys(preset.defaultDimensions);
             }),
             source = ko.pureComputed(function () {
                 return needsOwnRequest() ? ownResult() : app.result();
             }),
             drawn = ko.pureComputed(function () {
                 const result = source();
-                let metrics;
+                let metrics,
+                    wanted;
 
                 if (!result) {
                     return null;
@@ -73,7 +75,7 @@ define([
                 metrics = result.columns.filter(function (column) {
                     return column.type === 'metric';
                 });
-                let wanted = usesPresetChart() ? metrics.filter(function (column) {
+                wanted = usesPresetChart() ? metrics.filter(function (column) {
                     return preset.metrics.indexOf(column.code) !== -1;
                 }) : [];
 
