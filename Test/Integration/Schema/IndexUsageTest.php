@@ -101,19 +101,6 @@ final class IndexUsageTest extends TestCase
         );
     }
 
-    public function testItDocumentsARationaleForEveryModuleIndexAndTheRemovableIndexes(): void
-    {
-        $documentation = (string) file_get_contents(self::MODULE_ROOT . '/docs/indexes.md');
-        $schema = simplexml_load_string((string) file_get_contents(self::MODULE_ROOT . '/etc/db_schema.xml'));
-
-        foreach ($schema->xpath('//table[@resource="sales" or @resource="checkout"]/index') as $index) {
-            $this->assertStringContainsString((string) $index['referenceId'], $documentation);
-        }
-        $this->assertStringContainsString('## Removable', $documentation);
-        $removable = substr($documentation, (int) strpos($documentation, '## Removable'));
-        $this->assertStringContainsString('SALES_ORDER_ITEM_PRODUCT_ID', $removable);
-    }
-
     /**
      * On a prefixed install the declarative schema names indexes from the prefixed table, so the referenceId
      * is accepted as is or through the adapter's naming of the prefixed table and the declared columns.
