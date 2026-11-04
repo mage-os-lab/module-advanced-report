@@ -35,4 +35,22 @@ final class DbSchemaTest extends TestCase
             }
         }
     }
+
+    public function testItDocumentsEveryModuleIndexInTheIndexesDocument(): void
+    {
+        $root = \dirname(__DIR__, 3);
+        $xml = simplexml_load_string((string) file_get_contents($root . '/etc/db_schema.xml'));
+        self::assertNotFalse($xml);
+        $documentation = (string) file_get_contents($root . '/docs/indexes.md');
+
+        $referenceIds = [];
+        foreach ($xml->xpath('//index') ?: [] as $index) {
+            $referenceIds[] = (string) $index['referenceId'];
+        }
+
+        self::assertNotEmpty($referenceIds);
+        foreach ($referenceIds as $referenceId) {
+            self::assertStringContainsString('### ' . $referenceId . "\n", $documentation, $referenceId);
+        }
+    }
 }

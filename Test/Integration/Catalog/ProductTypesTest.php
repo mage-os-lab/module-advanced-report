@@ -192,7 +192,7 @@ final class ProductTypesTest extends TestCase
         $this->assertEqualsWithDelta(30.0, (float) $rows['ar-pt-bundle']['gross_sales'], 0.0001);
         $this->assertArrayNotHasKey('ar-pt-b1', $rows);
         $this->assertArrayNotHasKey('ar-pt-b2', $rows);
-        // known limitation: the bundle parent carries no cost
+        // documented limitation (R06): the bundle parent carries no cost
         $this->assertContains($rows['ar-pt-bundle']['cost'], [null, 0, 0.0, '0', '0.0000']);
     }
 

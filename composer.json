@@ -5,6 +5,14 @@
     "license": [
         "MIT"
     ],
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": false,
+            "magento/composer-dependency-version-audit-plugin": true,
+            "magento/magento-composer-installer": false
+        }
+    },
     "require": {
         "php": "~8.3.0||~8.4.0||~8.5.0",
         "magento/framework": "*",
@@ -31,6 +39,16 @@
         "magento/module-inventory-indexer": "Required by the catalog_salable dataset.",
         "magento/module-inventory-reservations": "Required by the catalog_salable dataset."
     },
+    "require-dev": {
+        "bitexpert/phpstan-magento": "^0.44",
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "magento/magento-coding-standard": "^41",
+        "phpmd/phpmd": "^3@dev",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpunit/phpunit": "^13.3",
+        "rector/rector": "^2.6"
+    },
     "autoload": {
         "files": [
             "registration.php"
@@ -38,5 +56,27 @@
         "psr-4": {
             "MageOS\\AdvancedReport\\": ""
         }
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://mirror.mage-os.org/"
+        }
+    ],
+    "scripts": {
+        "test:unit": "phpunit -c phpunit.xml.dist --testsuite unit",
+        "test:phpstan": "phpstan analyse --memory-limit=1G",
+        "test:cs-fixer": "php-cs-fixer fix --dry-run --diff --allow-risky=yes",
+        "test:xml": "php dev/validate-xml.php",
+        "test:rector": "rector process --dry-run",
+        "test:phpmd": "phpmd analyze --format=text --ruleset=phpmd.xml Api Console Controller Model Observer Test ViewModel",
+        "test": [
+            "@test:unit",
+            "@test:phpstan",
+            "@test:cs-fixer",
+            "@test:rector",
+            "@test:phpmd",
+            "@test:xml"
+        ]
     }
 }

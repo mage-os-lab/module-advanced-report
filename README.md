@@ -61,12 +61,12 @@ and in comparisons (they are never averages of averages).
 
 ## Requirements
 
-- Magento Open Source 2.4.7+ or Mage-OS, PHP 8.3+.
-- Database: MySQL 8.4 or MariaDB 11.4 (tested); MySQL 8.0 and MariaDB 10.6 are
+- Magento Open Source 2.4.7+ or Mage-OS, PHP 8.3+ (CI matrix and status: [compatibility](docs/compatibility.md)).
+- Database: MySQL 8.4 or MariaDB 11.4 (tested in the CI integration matrix); MySQL 8.0 and MariaDB 10.6 are
   declared, not tested. The report guardrail uses `MAX_EXECUTION_TIME` on MySQL and
   `max_statement_time` on MariaDB.
 - The `advanced_report` cache type must be enabled for result caching (reports still work with it disabled, uncached).
-- A `db/table_prefix` in `app/etc/env.php` is supported: every table the module reads is resolved through the report connection. Custom code that adds SQL must do the same, see [Advanced extension points](#advanced-extension-points).
+- A `db/table_prefix` in `app/etc/env.php` is supported: every table the module reads is resolved through the report connection (CI runs the integration suite once with prefix `pre_`). Custom code that adds SQL must do the same, see [Advanced extension points](#advanced-extension-points).
 - `Magento_Reports` (hard dependency: the admin menu entry is a child of the Reports menu).
 - Recommended: MySQL/MariaDB timezone tables (`mysql_tzinfo_to_sql`) when stores use a non-UTC timezone, for exact
   hourly and daily buckets in SQL; without them the module falls back to an UTC-hour aggregation (exact, but
@@ -87,7 +87,8 @@ bin/magento cache:flush
 `sales_order (customer_id, created_at)`, `sales_order (customer_email, created_at)`, `sales_order_item (product_id)`,
 `sales_order_item (product_id, order_id)` and `quote (updated_at)`. The build is online (`ALGORITHM=INPLACE, LOCK=NONE`, writes continue) but costs
 I/O, temporary sort space and replica lag that grow with the table size: on a store with a large `sales_order` table run
-the upgrade outside peak traffic (maintenance window recommended).
+the upgrade outside peak traffic (maintenance window recommended) and measure first with `dev/benchmark/index-timing.sql`
+(see [indexes](docs/indexes.md#installation-time-and-maintenance-window), risk R42).
 
 ### Upgrading
 
@@ -100,11 +101,12 @@ the upgrade outside peak traffic (maintenance window recommended).
   `checkout/cart/delete_quote_after` setting of `Magento_Checkout` (default 30 days) and assumes the core `sales_clean_quotes`
   cron runs. A lifetime of 0 or empty keeps only today's quotes.
 - Disabling the module and running `setup:upgrade` drops the `mageos_advancedreport_saved` table (saved reports are lost)
-  and the module indexes on core tables, because they are declared in `etc/db_schema.xml`. Back up the table first.
+  and the module indexes on core tables, because they are declared in `etc/db_schema.xml`. Back up the table first, see
+  [indexes](docs/indexes.md#disabling-the-module).
 - Several metrics changed meaning in this release: discounts are now net of the discount tax compensation, item amounts
   are net of the canceled quantity, dynamic price bundles roll up their children, guest carts use the billing address
   email, an ordered cart is never abandoned or recent, and field level ACL gates birth and gender (needs
-  `Magento_Sales::actions_view`).
+  `Magento_Sales::actions_view`). See [metric definitions](docs/metric-definitions.md) and [security](docs/security.md).
 
 ## Configuration reference
 
@@ -127,7 +129,7 @@ Stores > Configuration > Advanced Report > Configuration (default scope only).
 The report view shows a line with the order statuses currently counted (store-scoped labels when a single store is selected) and a link to this configuration.
 
 Weeks start on `general/locale/firstday` of the report scope store. Date filters use the website timezone
-(`general/locale/timezone`); amounts are in the base currency of the store.
+(`general/locale/timezone`); amounts are in the base currency of the store. See [time and currency](docs/time-and-currency.md).
 
 ## Metric definitions
 
@@ -234,7 +236,8 @@ MSI only: the dataset (and any preset on it) is dropped from the registry when `
 ### `carts` (Carts) and `cart_items` (Cart items)
 
 Area `carts`. Datasets on `quote` and `quote_item`; both are dated by the cart's last activity (`quote.updated_at`, store
-timezone). Only carts that have items are read (implicit `non_empty_cart` filter).
+timezone). Only carts that have items are read (implicit `non_empty_cart` filter). Full semantics in
+[metric definitions](docs/metric-definitions.md#carts-and-cart_items-carts).
 
 Presets: `recent_carts`, `recent_cart_items`, `abandoned_carts_trend`, `abandoned_carts_list`, `top_abandoned_products`,
 `products_added_to_cart`, `cart_conversion`.
@@ -543,7 +546,8 @@ overrides the matrix is unchanged. With overrides, an expensive scenario identic
 `new_vs_returning_12m`) is merged into the matrix one (the first one is kept).
 
 `--worker` and `--start-at` are internal options of the concurrency mode. The command runs under a trusted CLI authorization
-(no admin session).
+(no admin session), see [security](docs/security.md#trusted-cli-authorization-benchmark). The seed, procedure, budgets and the
+results table are in [docs/performance.md](docs/performance.md).
 
 ## `advanced-report:inventory`
 
@@ -552,15 +556,23 @@ Prints the metric inventory: for every metric of every dataset its kind, aggrega
 ```bash
 bin/magento advanced-report:inventory                                  # Markdown, all datasets
 bin/magento advanced-report:inventory --format=json --dataset=sales_orders
-bin/magento advanced-report:inventory --output=var/metric-inventory.md
+bin/magento advanced-report:inventory --output=docs/metric-inventory.md
 ```
 
-`--format` (`md` default, or `json`), `--dataset` (default: all) and `--output` (file path, relative to the current directory, instead of stdout) are optional.
+`--format` (`md` default, or `json`), `--dataset` (default: all) and `--output` (file path, relative to the current directory, instead of stdout) are optional. Regenerate `docs/metric-inventory.md` whenever definitions change with `bin/magento advanced-report:inventory --output=app/code/MageOS/AdvancedReport/docs/metric-inventory.md` from the Magento root (prefer `--output` over redirecting stdout).
 
 ## Performance notes
 
 Reports are live queries (no indexer, no aggregation tables): the cost grows with the rows of the selected period and
-pagination does not reduce the database work.
+pagination does not reduce the database work. Details live in three documents:
+
+- [Performance](docs/performance.md): statements per report shape, safeguards (timeout on every statement, `max_rows`,
+  granularity limits, export limits, connection errors), the benchmark procedure (performance toolkit seed,
+  `advanced-report:benchmark`, `advanced-report:explain`), budgets, the results table and the known bottlenecks.
+- [Cache](docs/cache.md): key components (including the result config), TTLs, invalidation, label staleness, failures, the stampede lock and the freshness per report category.
+- [Indexes](docs/indexes.md): rationale of every index, removable indexes and the installation time / maintenance window.
+
+In short:
 
 - **Indexes**: `setup:upgrade` adds `sales_order (customer_id, created_at)`, `sales_order (customer_email, created_at)`,
   `sales_order_item (product_id)`, `sales_order_item (product_id, order_id)` and `quote (updated_at)`; date filters use the native indexes. Check
@@ -580,7 +592,7 @@ pagination does not reduce the database work.
   (`COUNT DISTINCT` over emails), sales by category (one row per product category) and the dead stock / never sold
   presets (anti-joins on `sales_order_item`). Prefer shorter periods on very large catalogs or order tables.
 - **After upgrading**: constructors changed, so regenerate the generated code (`setup:di:compile` in production, clear
-  `generated/` in developer mode) and run `setup:upgrade` for the new indexes.
+  `generated/` in developer mode) and run `setup:upgrade` for the new indexes (risk R33 in the [risk register](docs/risk-register.md)).
 
 ## Security and permissions
 
@@ -595,17 +607,34 @@ its entity. Full functionality needs these core resources:
 
 `dead_stock` and `never_sold` also need the `sales_items` permission (they read order items). Birth date and gender fields need `Magento_Sales::actions_view` on the order datasets and `Magento_Customer::manage` on `customers` (field level ACL). An owner who lost a dataset permission can still delete their own saved report.
 
+Details, the entry-point inventory and the data classification are in [docs/security.md](docs/security.md).
+
 ## Known limits
 
+The full list with severity and owner is in the [risk register](docs/risk-register.md). Metric semantics are in the [metric definitions](docs/metric-definitions.md); timezone and currency rules are in [time and currency](docs/time-and-currency.md).
+
 - **Monetary reports and several base currencies**: a request with money metrics (or money filters) over stores or orders with different base currencies is rejected with HTTP 400 (also on Save, Export and `advanced-report:explain`). Select stores sharing one base currency. Orders, units and customer reports are not affected.
-- **Attribution to the order date**: returns, shipped units, units to ship, shipments and credit memos are attributed to the original order date, not the credit memo or shipment date, so past periods change when refunds or shipments are created.
-- **Product types and dimensions**: bundle products are one line; a multiselect attribute dimension is bucketed by its raw stored value; `category_id` is a fan-out dimension, totals may not equal the sum of the rows.
-- **Customers**: new vs returning counts a guest later registered (a registered order after a guest order with the same email is new), or a customer who changes email, twice; accounts with `store_id` 0 or a deleted store are excluded when stores are filtered; large lists are capped by `max_rows`; an unmatched gender value is shown raw.
-- **Inventory**: stock value uses the default-scope price and cost; without MSI there is no `catalog_salable` dataset, reserved quantity or source dimension; multi-stock salable quantities are covered only by unit tests, an accepted risk.
-- **Compatibility**: `Magento_Reports` is a hard dependency; Magento Open Source / Mage-OS only, Adobe Commerce `row_id` is unsupported.
-- **Freshness and security**: results are cached with TTL-only freshness; roles that only had a module dataset ACL need the matching core ACL after the upgrade; no website-scoped admin roles.
-- **Comparisons**: previous period is the same number of calendar days before the range (the preceding whole months when the range is whole months); previous year is the same calendar dates (29 February becomes 28 February). Rows are aligned only with a single date dimension; with another dimension next to a date the comparison values are empty. Comparison rows are not gap filled, there is no quarter granularity and metrics cannot be filtered.
+- **Attribution to the order date**: returns, shipped units, units to ship, shipments and credit memos are attributed to the original order date, not the credit memo or shipment date, so past periods change when refunds or shipments are created (R04, R05).
+- **Product types and dimensions**: bundle products are one line (R06); a multiselect attribute dimension is bucketed by its raw stored value (R07); `category_id` is a fan-out dimension, totals may not equal the sum of the rows (R01).
+- **Customers**: new vs returning counts a guest later registered (a registered order after a guest order with the same email is new), or a customer who changes email, twice (R08, R14, R28); accounts with `store_id` 0 or a deleted store are excluded when stores are filtered (R15); large lists are capped by `max_rows` (R16); an unmatched gender value is shown raw (R09).
+- **Inventory**: stock value uses the default-scope price and cost (R10); without MSI there is no `catalog_salable` dataset, reserved quantity or source dimension (R27); multi-stock salable quantities are covered only by unit tests, an accepted risk (R26).
+- **Compatibility**: `Magento_Reports` is a hard dependency (R11); Magento Open Source / Mage-OS only, Adobe Commerce `row_id` is unsupported (R12).
+- **Freshness and security**: results are cached with TTL-only freshness (R18, R21, R44); roles that only had a module dataset ACL need the matching core ACL after the upgrade (R29); no website-scoped admin roles (R30).
+- **Comparisons**: previous period is the same number of calendar days before the range (the preceding whole months when the range is whole months); previous year is the same calendar dates (29 February becomes 28 February). Rows are aligned only with a single date dimension; with another dimension next to a date the comparison values are empty. Comparison rows are not gap filled, there is no quarter granularity and metrics cannot be filtered. Details in [time and currency](docs/time-and-currency.md#comparison-periods).
 - **Upgrade note**: the former "mixed base currencies" warning was removed; reports that used to show it are now rejected. Without MySQL timezone tables, results are exact but non-additive metrics are empty and non whole-hour timezones reach the row cap sooner.
+
+## Documentation
+
+- [Metric definitions](docs/metric-definitions.md): business definition of every metric (formula, cancel/refund treatment, currency, date attribution, additivity, known limits) with the integration tests that prove it, and physical vs reserved vs salable quantities.
+- [Time and currency](docs/time-and-currency.md): timezone used for filtering, grouping, comparison and display, DST, the fallback without timezone tables, the currency of every financial metric, rejection rules and rounding.
+- [Metric inventory](docs/metric-inventory.md): generated list of every metric, its joins, fan-out risk and dependencies.
+- [Performance](docs/performance.md): statements per report, safeguards, benchmark procedure and results table, bottlenecks, async evaluation.
+- [Cache](docs/cache.md): cache key (including the result config), TTLs, invalidation, label staleness, failures, stampede lock and freshness per report category.
+- [Indexes](docs/indexes.md): rationale of every index, removable indexes, installation time and maintenance window.
+- [Security](docs/security.md): ACL model per entry point and dataset, data classification, cache and logging.
+- [Risk register](docs/risk-register.md): known risks with severity and owner sub-plan.
+- [Compatibility](docs/compatibility.md): supported Magento, PHP and database versions and the CI job enforcing each.
+- [Testing](docs/testing.md): local quality and integration commands, CI jobs and the database matrix.
 
 ## Roadmap
 
