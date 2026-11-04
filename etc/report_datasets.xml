@@ -1139,6 +1139,9 @@
         <dimension code="parent_sku"/>
         <filter field="qty_refunded_qty" operator="gte" value="0.0001"/>
         <sort by="units_refunded" direction="desc"/>
+        <chart type="horizontalBar">
+            <metric code="units_refunded"/>
+        </chart>
     </preset>
 
     <preset code="top_search_terms" area="catalog" dataset="search_terms" label="Top search terms" description="Most searched terms, with the number of results they return." dateRange="year_to_date" sources="mysql">
@@ -1146,6 +1149,9 @@
         <metric code="avg_results"/>
         <dimension code="search_term"/>
         <sort by="searches" direction="desc"/>
+        <chart type="horizontalBar">
+            <metric code="searches"/>
+        </chart>
     </preset>
 
     <preset code="search_terms_no_results" area="catalog" dataset="search_terms" label="Searches without results" description="Terms customers looked for and did not find: the catalog or synonym gaps to fix first." dateRange="year_to_date" sources="mysql">
@@ -1153,6 +1159,9 @@
         <dimension code="search_term"/>
         <filter field="has_no_results" operator="eq" value="1"/>
         <sort by="searches" direction="desc"/>
+        <chart type="horizontalBar">
+            <metric code="searches"/>
+        </chart>
     </preset>
 
     <!-- Customer presets (area customers). -->
