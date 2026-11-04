@@ -1,5 +1,5 @@
 {
-    "name": "mageos/module-advanced-report",
+    "name": "mage-os/module-advanced-report",
     "description": "Advanced sales and catalog reporting for Magento Open Source / Mage-OS.",
     "type": "magento2-module",
     "license": [

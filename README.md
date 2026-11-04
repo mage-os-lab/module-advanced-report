@@ -1,4 +1,4 @@
-# MageOS_AdvancedReport
+# MageOS AdvancedReport
 
 Advanced sales, catalog and customer reporting for Magento Open Source / Mage-OS. It adds an admin
 exploration app (Reports > Advanced Report) on top of a declarative semantic layer: datasets, fields,
@@ -75,6 +75,7 @@ and in comparisons (they are never averages of averages).
 ## Installation
 
 ```bash
+composer require mage-os/module-advanced-report
 bin/magento module:enable MageOS_AdvancedReport
 bin/magento setup:upgrade
 bin/magento cache:flush
