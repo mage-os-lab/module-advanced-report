@@ -5,6 +5,12 @@
     "license": [
         "MIT"
     ],
+    "authors": [
+        {
+            "name": "Luca Fuser",
+            "email": "fuse94@libero.it",
+        }
+    ],
     "config": {
         "sort-packages": true,
         "allow-plugins": {
@@ -57,12 +63,16 @@
             "MageOS\\AdvancedReport\\": ""
         }
     },
-    "repositories": [
-        {
+    "repositories": {
+        "mage-os-mirror": {
             "type": "composer",
             "url": "https://mirror.mage-os.org/"
+        },
+        "mage-os": {
+            "type": "composer",
+            "url": "https://repo.mage-os.org/"
         }
-    ],
+    },
     "scripts": {
         "test:unit": "phpunit -c phpunit.xml.dist --testsuite unit",
         "test:phpstan": "phpstan analyse --memory-limit=1G",
