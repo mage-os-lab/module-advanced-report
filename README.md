@@ -9,6 +9,10 @@ metrics and dimensions are declared in XML and translated to SQL by a MySQL data
 - Predefined reports (sales overview, sales by payment/shipping method/country/customer group/hour/weekday,
   new vs returning customers, coupon performance, product performance, sales by category/attribute,
   customer value, new customer registrations, stock value, low stock with coverage, dead stock, never sold,
+  most refunded products, top search terms, searches without results).
+- Free exploration: pick metrics, group by dimensions, filter, compare to the previous period/year,
+  chart and table, CSV export. Each preset declares its default chart; the chart type can be changed from the chart
+  card for the current page.
   recent carts and cart items, abandoned carts (trend, list, top products), products added to cart, cart conversion).
 - Free exploration: pick metrics, group by dimensions, filter, compare to the previous period/year,
   chart and table, CSV export. Each preset declares its default chart; the chart type can be changed from the chart

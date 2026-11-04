@@ -37,7 +37,7 @@ final class CatalogStockDatasetTest extends TestCase
         $datasets = $this->loadReportDatasets();
 
         self::assertCount(
-            18,
+            19,
             $datasets['sales_items']->metrics,
             'No sales_items metric should have been dropped by the validator.'
         );
