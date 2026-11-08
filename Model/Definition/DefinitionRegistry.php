@@ -14,7 +14,8 @@ use Psr\Log\LoggerInterface;
  *
  * The build pipeline is intentionally kept in one place, in explicit steps, so later
  * tasks can extend it without restructuring it:
- * 1. read the converted array ({@see \MageOS\AdvancedReport\Model\Config\Data});
+ * 1. read the converted array ({@see \MageOS\AdvancedReport\Model\Config\Data}) and merge the datasets and
+ *    presets of every definition source over it (e.g. the RMA definitions, {@see DefinitionSourceInterface});
  * 2. build the value objects ({@see DefinitionFactory});
  * 3. dataset extenders (task 021, e.g. synthesized attribute dimensions);
  * 4. preset extenders (task 031, e.g. alternate dimension presets);
@@ -46,6 +47,7 @@ class DefinitionRegistry
      * @param PresetExtenderInterface[] $presetExtenders
      * @param DatasetAvailabilityInterface[] $datasetAvailability
      * @param LoggerInterface|null $logger
+     * @param DefinitionSourceInterface[] $definitionSources
      */
     public function __construct(
         private readonly DataInterface $configData,
@@ -55,6 +57,7 @@ class DefinitionRegistry
         private readonly array $presetExtenders = [],
         private readonly array $datasetAvailability = [],
         private readonly ?LoggerInterface $logger = null,
+        protected readonly array $definitionSources = [],
     ) {
     }
 
@@ -142,6 +145,11 @@ class DefinitionRegistry
         // Magento\Framework\Config\Data treats a null key as "return the whole merged array".
         // @phpstan-ignore-next-line argument.type
         $converted = $this->configData->get(null) ?? [];
+        foreach ($this->definitionSources as $source) {
+            $extra = $source->getDefinitions();
+            $converted['datasets'] = array_replace($converted['datasets'] ?? [], $extra['datasets'] ?? []);
+            $converted['presets'] = array_replace($converted['presets'] ?? [], $extra['presets'] ?? []);
+        }
         $this->configVersion = hash('sha256', (string) json_encode($converted));
 
         $datasets = $this->definitionFactory->createDatasets($converted['datasets'] ?? []);

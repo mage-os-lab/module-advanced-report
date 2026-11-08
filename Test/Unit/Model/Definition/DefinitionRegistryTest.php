@@ -11,6 +11,7 @@ use MageOS\AdvancedReport\Model\Definition\DatasetAvailabilityInterface;
 use MageOS\AdvancedReport\Model\Definition\DatasetExtenderInterface;
 use MageOS\AdvancedReport\Model\Definition\DefinitionFactory;
 use MageOS\AdvancedReport\Model\Definition\DefinitionRegistry;
+use MageOS\AdvancedReport\Model\Definition\DefinitionSourceInterface;
 use MageOS\AdvancedReport\Model\Definition\DefinitionValidator;
 use MageOS\AdvancedReport\Model\Definition\FieldType;
 use MageOS\AdvancedReport\Model\Definition\Granularity;
@@ -234,6 +235,67 @@ final class DefinitionRegistryTest extends TestCase
 
         self::assertSame(['sales_orders'], array_keys($registry->getDatasets()));
         self::assertSame(['sales_overview'], array_keys($registry->getPresets()));
+    }
+
+    /**
+     * @return void
+     */
+    public function testItMergesTheDatasetsAndPresetsOfEveryDefinitionSourceOverTheConvertedConfig(): void
+    {
+        $configData = $this->createStub(DataInterface::class);
+        $configData->method('get')->willReturn([
+            'datasets' => ['sales_orders' => $this->minimalDatasetRaw()],
+            'presets' => ['sales_overview' => $this->minimalPresetRaw()],
+        ]);
+        $source = $this->createStub(DefinitionSourceInterface::class);
+        $source->method('getDefinitions')->willReturn([
+            'datasets' => [
+                'sales_orders' => $this->minimalDatasetRaw('catalog'),
+                'rma_requests' => ['code' => 'rma_requests'] + $this->minimalDatasetRaw('returns'),
+            ],
+            'presets' => [
+                'returns_overview' => ['code' => 'returns_overview', 'area' => 'returns', 'dataset' => 'rma_requests']
+                    + $this->minimalPresetRaw(),
+            ],
+        ]);
+        $empty = $this->createStub(DefinitionSourceInterface::class);
+        $empty->method('getDefinitions')->willReturn([]);
+
+        $registry = new DefinitionRegistry(
+            $configData,
+            new DefinitionFactory(),
+            $this->passthroughValidator(),
+            definitionSources: [$source, $empty]
+        );
+
+        self::assertSame(['sales_orders', 'rma_requests'], array_keys($registry->getDatasets()));
+        self::assertSame('catalog', $registry->getDataset('sales_orders')->area);
+        self::assertSame('returns', $registry->getDataset('rma_requests')->area);
+        self::assertSame(['sales_overview', 'returns_overview'], array_keys($registry->getPresets()));
+        self::assertSame('rma_requests', $registry->getPreset('returns_overview')->dataset);
+    }
+
+    /**
+     * @return void
+     */
+    public function testItIncludesTheDefinitionSourcesInTheConfigVersion(): void
+    {
+        $converted = ['datasets' => ['sales_orders' => $this->minimalDatasetRaw()], 'presets' => []];
+        $configData = $this->createStub(DataInterface::class);
+        $configData->method('get')->willReturn($converted);
+        $source = $this->createStub(DefinitionSourceInterface::class);
+        $source->method('getDefinitions')->willReturn([
+            'datasets' => ['rma_requests' => ['code' => 'rma_requests'] + $this->minimalDatasetRaw('returns')],
+        ]);
+
+        $registry = new DefinitionRegistry(
+            $configData,
+            new DefinitionFactory(),
+            $this->passthroughValidator(),
+            definitionSources: [$source]
+        );
+
+        self::assertNotSame($this->createRegistry($converted)->getConfigVersion(), $registry->getConfigVersion());
     }
 
     /**
