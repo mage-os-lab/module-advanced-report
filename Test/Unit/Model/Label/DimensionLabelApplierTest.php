@@ -13,26 +13,19 @@ use MageOS\AdvancedReport\Model\Query\DimensionSelection;
 use MageOS\AdvancedReport\Model\Query\ReportScope;
 use MageOS\AdvancedReport\Model\Query\ResolvedQuery;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(DimensionLabelApplier::class)]
 final class DimensionLabelApplierTest extends TestCase
 {
-    private LabelResolverInterface&MockObject $resolver;
-
-    protected function setUp(): void
-    {
-        $this->resolver = $this->createMock(LabelResolverInterface::class);
-    }
-
     public function testItReplacesDimensionValuesWithResolvedLabels(): void
     {
-        $this->resolver->expects(self::once())->method('resolve')
+        $resolver = $this->createMock(LabelResolverInterface::class);
+        $resolver->expects(self::once())->method('resolve')
             ->with(['IT', ''], ['kind' => 'x'])
             ->willReturn(['IT' => 'Italy', '' => '(none)']);
 
-        $rows = $this->applier(['R' => $this->resolver])->apply($this->query(['country']), [
+        $rows = $this->applier(['R' => $resolver])->apply($this->query(['country']), [
             $this->row(['country' => 'IT']),
             $this->row(['country' => null]),
         ]);
@@ -43,9 +36,10 @@ final class DimensionLabelApplierTest extends TestCase
 
     public function testItKeepsRawValuesInDimsRaw(): void
     {
-        $this->resolver->method('resolve')->willReturn(['IT' => 'Italy']);
+        $resolver = $this->createStub(LabelResolverInterface::class);
+        $resolver->method('resolve')->willReturn(['IT' => 'Italy']);
 
-        $rows = $this->applier(['R' => $this->resolver])->apply(
+        $rows = $this->applier(['R' => $resolver])->apply(
             $this->query(['country']),
             [$this->row(['country' => 'IT']), $this->row(['country' => null])]
         );
@@ -56,7 +50,7 @@ final class DimensionLabelApplierTest extends TestCase
 
     public function testItLeavesDimensionsWithoutLabelResolverUnchanged(): void
     {
-        $rows = $this->applier(['R' => $this->resolver])->apply(
+        $rows = $this->applier(['R' => $this->createStub(LabelResolverInterface::class)])->apply(
             $this->query(['plain']),
             [$this->row(['plain' => 'abc'])]
         );
@@ -73,9 +67,10 @@ final class DimensionLabelApplierTest extends TestCase
 
     public function testItDoesNotCallResolversForEmptyRows(): void
     {
-        $this->resolver->expects(self::never())->method('resolve');
+        $resolver = $this->createMock(LabelResolverInterface::class);
+        $resolver->expects(self::never())->method('resolve');
 
-        self::assertSame([], $this->applier(['R' => $this->resolver])->apply($this->query(['country']), []));
+        self::assertSame([], $this->applier(['R' => $resolver])->apply($this->query(['country']), []));
     }
 
     public function testItCastsNullDimensionValuesToEmptyString(): void
