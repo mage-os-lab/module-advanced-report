@@ -28,7 +28,7 @@ isolation between roles and the request validation errors.
 
 A dataset is readable only when **both** gates pass (`Model/Security/DatasetAccess`):
 
-1. the module dataset ACL (`acl` attribute in `etc/report_datasets.xml`: `sales`, `catalog`, `customers`, `carts` or `marketing`), and
+1. the module dataset ACL (`acl` attribute in `etc/report_datasets.xml`: `sales`, `catalog`, `customers`, `carts` or `marketing`; `returns` in `etc/report_datasets_rma.xml`), and
 2. the core ACL of the entity the dataset reads (one resource, or a list that must all be granted), from the `coreResources` argument of `DatasetAccess` in `etc/di.xml`.
    The core gate is skipped when the resource is not declared in the ACL tree (for example a disabled module).
 
@@ -42,6 +42,13 @@ A dataset is readable only when **both** gates pass (`Model/Security/DatasetAcce
 | `catalog_salable` | `MageOS_AdvancedReport::catalog` | `Magento_InventoryApi::stock` | MSI stock data; skipped without MSI |
 | `carts` | `MageOS_AdvancedReport::carts` | `Magento_Reports::abandoned` and `Magento_Sales::sales_order` (both required) | Abandoned cart report of core plus the order permission needed for the converted state |
 | `cart_items` | `MageOS_AdvancedReport::carts` | `Magento_Reports::abandoned` and `Magento_Sales::sales_order` (both required) | Same as `carts` |
+| `rma_requests` | `MageOS_AdvancedReport::returns` | `MageOS_RMA::rma_manage` and `Magento_Sales::sales_order` (both required) | Same entity as the core return grid, plus the order permission because it reads the order, its shipping address and its shipments. Exists only while `MageOS_RMA` is enabled |
+| `rma_items` | `MageOS_AdvancedReport::returns` | `MageOS_RMA::rma_manage` and `Magento_Sales::sales_order` (both required) | Return items with their order items, products and shipments. Exists only while `MageOS_RMA` is enabled |
+| `order_returns` | `MageOS_AdvancedReport::returns` | `MageOS_RMA::rma_manage` and `Magento_Sales::sales_order` (both required) | Orders with their return requests. Exists only while `MageOS_RMA` is enabled |
+| `order_item_returns` | `MageOS_AdvancedReport::returns` | `MageOS_RMA::rma_manage` and `Magento_Sales::sales_order` (both required) | Order lines with their requested quantities. Exists only while `MageOS_RMA` is enabled |
+
+While `MageOS_RMA` is disabled, `ReturnsAclResourcePlugin` removes `MageOS_AdvancedReport::returns` from the ACL tree
+returned by `Magento\Framework\Acl\AclResource\ProviderInterface`, so roles cannot be granted a permission without data.
 | `marketing` datasets of add-on modules (for example `gar_ga4_*` of `MageOS_GoogleAdvancedReport`) | `MageOS_AdvancedReport::marketing` | Declared by the add-on (`gar_ga4_transaction`: `Magento_Sales::sales_order`); module ACL only when none is declared | Imported marketing data; reconciliation reads orders |
 
 Consequences:
@@ -80,9 +87,12 @@ Consequences:
 | `payment_method` | `sales_orders` | Commercial | Payment mix |
 | `customer_email` (dimension; also in `abandoned_carts_list`) | `carts` | Personal data (identifying; guests included) | Contacting the owner of an abandoned cart |
 | `coupon_code` | `carts` | Commercial | Coupons left in carts |
+| `customer_email` (dimension) | `rma_requests` | Personal data (identifying; guests included) | Identifying the customers who make return requests |
+| `increment_id` (dimension, request number) | `rma_requests` | Personal data (identifies a request and, through it, its customer) | Following up open return requests |
 
 Order-level datasets (`sales_orders`, `customer_orders`, `sales_items`) follow `Magento_Sales::sales_order`, as the core
-order view does; `customers` requires `Magento_Customer::manage`. Exports go through the same checks and need `export` too.
+order view does; `customers` requires `Magento_Customer::manage`; the return datasets require `MageOS_RMA::rma_manage`
+and `Magento_Sales::sales_order`. Exports go through the same checks and need `export` too.
 
 ## Field level ACL
 

@@ -9,7 +9,10 @@ metrics and dimensions are declared in XML and translated to SQL by a MySQL data
 - Predefined reports (sales overview, sales by payment/shipping method/country/customer group/hour/weekday,
   new vs returning customers, coupon performance, product performance, sales by category/attribute,
   customer value, new customer registrations, stock value, low stock with coverage, dead stock, never sold,
-  recent carts and cart items, abandoned carts (trend, list, top products), products added to cart, cart conversion).
+  recent carts and cart items, abandoned carts (trend, list, top products), products added to cart, cart conversion,
+  and, only while `MageOS_RMA` is enabled, returns: overview, withdrawals before shipment vs returns after shipment,
+  returns by reason/status/resolution/item condition, open requests, top returned products, product and order return
+  rates, return rate by shipping country).
 - Free exploration: pick metrics, group by dimensions, filter, compare to the previous period/year,
   chart and table, CSV export. Each preset declares its default chart; the chart type can be changed from the chart
   card for the current page.
@@ -27,7 +30,7 @@ Reports are not hard-coded queries. Every report is a combination of a few build
 
 | Concept | What it is | Example |
 |---|---|---|
-| **Dataset** | A reportable entity with one row per record: its base table (or a base select provider), the ACL resource that protects it, the area it belongs to (`sales`, `catalog`, `customers`, `carts`, `marketing`) and the implicit filters always applied to it. | `sales_orders` (one row per order), `sales_items` (one row per top-level order item), `customer_orders`, `customers`, `catalog_stock`, `catalog_salable` (MSI only), `carts`, `cart_items`. |
+| **Dataset** | A reportable entity with one row per record: its base table (or a base select provider), the ACL resource that protects it, the area it belongs to (`sales`, `catalog`, `customers`, `carts`, `marketing`, `returns`) and the implicit filters always applied to it. | `sales_orders` (one row per order), `sales_items` (one row per top-level order item), `customer_orders`, `customers`, `catalog_stock`, `catalog_salable` (MSI only), `carts`, `cart_items`, `rma_requests`, `rma_items`, `order_returns`, `order_item_returns` (`MageOS_RMA` only). |
 | **Field** | A named, typed SQL expression on the dataset rows (`money`, `integer`, `decimal`, `boolean`, `string`, `id`, `date`). It may need one or more joins. Every field can be used as a filter. | `gross_sales_amount` = subtotal minus canceled subtotal; `billing_country` = billing address country (needs the `billing_address` join). |
 | **Join** | A table joined to the dataset, declared once and added to the query only when a selected field needs it. A join can `require` another join. | `payment`, `billing_address`, `store`. |
 | **Metric** | A number to measure. Either an **aggregate** (`sum`, `count`, `count_distinct`, `min`, `max`, `avg`) of a field, optionally restricted to the rows where a boolean field is true (`condition`), or a **formula** over other metrics (`+ - * /`, parentheses, numbers). | `orders` = `COUNT(order_id)`; `net_sales` = `gross_sales - discounts - returns`; `aov` = `net_sales / orders`. |
@@ -258,6 +261,145 @@ Presets: `recent_carts`, `recent_cart_items`, `abandoned_carts_trend`, `abandone
   abandoned and recent thresholds.
 - Customer emails are exposed (`customer_email` dimension, `abandoned_carts_list`): personal data.
 
+### Returns (MageOS_RMA)
+
+Area `returns`. The return reports exist **only while the module `MageOS_RMA` is enabled**. Their datasets and presets
+are not in `etc/report_datasets.xml` but in `etc/report_datasets_rma.xml`, read by
+`Model\Rma\Config\RmaDefinitionSource` (a `DefinitionRegistry` definition source) only when `MageOS_RMA` is enabled.
+With the module disabled or absent the file is not read: no dataset, preset, report area or dashboard chart exists,
+and saved reports on these datasets are hidden until the module is enabled again. No `MageOS\RMA` PHP class is used:
+the reports read the RMA tables (`rma_entity`, `rma_item`, `rma_status`, `rma_reason`, `rma_resolution_type`,
+`rma_item_condition`) directly, through the report connection (table prefix aware).
+
+ACL: the module resource `MageOS_AdvancedReport::returns` (Advanced Report > Returns) **and** the core resources
+`MageOS_RMA::rma_manage` and `Magento_Sales::sales_order`, on all four datasets. While `MageOS_RMA` is disabled the
+`MageOS_AdvancedReport::returns` resource is removed from the ACL tree (`Model\Rma\Plugin\ReturnsAclResourcePlugin`, an
+after plugin on `Magento\Framework\Acl\AclResource\ProviderInterface`), so the role editor does not offer it.
+
+| Dataset | Label | Rows | Dated by |
+|---|---|---|---|
+| `rma_requests` | Return requests | one per return request (`rma_entity`) | request creation date |
+| `rma_items` | Returned items | one per request item (`rma_item`) | request creation date |
+| `order_returns` | Orders and return requests | one per order (`sales_order`, counted statuses) | order date |
+| `order_item_returns` | Ordered and returned units | one per top-level order item (`sales_order_item`, counted statuses) | order date |
+
+#### Request type
+
+Every request is classified by comparing its items with the shipments of the order:
+
+| Type | Code | Meaning |
+|---|---|---|
+| Withdrawal before shipment | `withdrawal` | No item of the request had been shipped when the request was created. |
+| Return after shipment | `return` | Every item of the request had been shipped when the request was created. |
+| Mixed (partly shipped) | `mixed` | Some items had been shipped, others had not. |
+
+- An item counts as shipped when a shipment containing it was created at or before the request (`sales_shipment.created_at
+  <= rma_entity.created_at`); for a bundle shipped separately, a shipment containing one of its children.
+- **Delivery is not tracked** (Magento stores no delivery date): a request made after shipment but before delivery is a
+  return after shipment.
+- A request without items has no type: it is counted in `requests` but in none of the three type metrics.
+- On `rma_items` the type is decided per item, so it is only `withdrawal` or `return` (never `mixed`).
+
+#### `rma_requests` (Return requests)
+
+| Metric | Format | Definition | Notes |
+|---|---|---|---|
+| `requests` | integer | `COUNT(rma_id)` | Return requests created in the period, in any status. |
+| `orders_with_requests` | integer | `COUNT DISTINCT(order_id)` | Distinct orders with at least one request created in the period. |
+| `customers_with_requests` | integer | `COUNT DISTINCT(customer_email)` | Distinct customers by request email (lowercased, trimmed); guests and registered customers are merged. |
+| `requests_per_order` | number | `requests / orders_with_requests` | Requests per order with requests. |
+| `units_requested` | number | `SUM(units_requested_qty)` | Quantity requested on the request items (`qty_requested`), not the approved or received quantity. |
+| `withdrawals` | integer | `SUM(is_withdrawal)` | Requests of type withdrawal before shipment. |
+| `returns_after_shipment` | integer | `SUM(is_return_after_shipment)` | Requests of type return after shipment. |
+| `mixed_requests` | integer | `SUM(is_mixed_request)` | Requests of type mixed (partly shipped). |
+| `withdrawal_share` | percent | `withdrawals / requests` | Share of the requests that are withdrawals before shipment. |
+| `open_requests` | integer | `SUM(is_open)` | Requests whose current status is not rejected, canceled by customer or resolved. A lower value is an improvement. |
+| `rejected_requests` | integer | `SUM(is_rejected)` | Requests whose current status is rejected. |
+| `resolved_requests` | integer | `SUM(is_resolved)` | Requests whose current status is resolved. |
+| `canceled_requests` | integer | `SUM(is_canceled)` | Requests whose current status is canceled by customer. |
+| `rejection_rate` | percent | `rejected_requests / requests` | Share of the requests rejected. A lower value is an improvement. |
+| `avg_days_to_request` | number | `AVG(days_to_request)` | Average days from the order to the request. |
+| `avg_days_from_shipment` | number | `AVG(days_from_shipment)` | Average days from the latest shipment created before the request to the request; requests with nothing shipped before them are excluded. |
+
+Dimensions: `request_date` (hour, day, week, month, year), `status_id`, `reason_id`, `resolution_type_id` (labels from
+the RMA lookup tables, translated through `__()`), `request_type`, `store_id`, `website_id`, `customer_group_id` (of the
+order), `customer_type` (guest or registered), `shipping_country` (order shipping address), `increment_id` (request
+number), `customer_email`.
+
+#### `rma_items` (Returned items)
+
+| Metric | Format | Definition | Notes |
+|---|---|---|---|
+| `units_requested` | number | `SUM(qty_requested_qty)` | Quantity requested for return. |
+| `requested_value` | money | `SUM(requested_value_amount)` | Requested quantity times the unit value of the order item: (row total - discount, net of the discount tax compensation) / quantity ordered. Base currency, excluding tax; dynamic price bundles use the discount of their children. It is the value of the request, not a refunded amount (credit memos are in `sales_items`). |
+| `requests` | integer | `COUNT DISTINCT(rma_id)` | Distinct requests containing the item. |
+| `withdrawn_units` | number | `SUM(qty_requested_qty)` where `is_withdrawal` | Units requested before they were shipped. |
+| `returned_units_after_shipment` | number | `SUM(qty_requested_qty)` where `is_return_after_shipment` | Units requested after they were shipped. |
+| `units_per_request` | number | `units_requested / requests` | Units requested per request. |
+
+Dimensions: `request_date`, `sku`, `parent_sku`, `product_id` (product name), `status_id`
+and `reason_id` (of the request), `condition_id` (item condition), `request_type`, `store_id`.
+
+#### `order_returns` (Orders and return requests)
+
+| Metric | Format | Definition | Notes |
+|---|---|---|---|
+| `orders` | integer | `COUNT(order_id)` | Orders placed in the period (counted statuses). |
+| `orders_with_requests` | integer | `SUM(has_return_request)` | Orders of the period with at least one return request, made at any time; an order with several requests counts once. |
+| `return_requests` | integer | `SUM(return_request_count)` | Return requests on the orders of the period, made at any time. |
+| `order_return_rate` | percent | `orders_with_requests / orders` | Share of the orders with a return request. A lower value is an improvement. |
+| `requests_per_returned_order` | number | `return_requests / orders_with_requests` | Requests per order with requests. |
+| `orders_with_withdrawals` | integer | `SUM(has_withdrawal)` | Orders with at least one requested item not shipped when requested. |
+| `orders_with_returns_after_shipment` | integer | `SUM(has_return_after_shipment)` | Orders with at least one requested item shipped before the request. |
+| `withdrawal_rate` | percent | `orders_with_withdrawals / orders` | A lower value is an improvement. |
+| `return_after_shipment_rate` | percent | `orders_with_returns_after_shipment / orders` | A lower value is an improvement. |
+
+An order with a mixed request, or with requests of both types, counts in both `orders_with_withdrawals` and
+`orders_with_returns_after_shipment`. Dimensions: `order_date`, `store_id`, `website_id`, `customer_group_id`,
+`shipping_country`, `shipping_method`, `payment_method`.
+
+#### `order_item_returns` (Ordered and returned units)
+
+| Metric | Format | Definition | Notes |
+|---|---|---|---|
+| `units_ordered` | number | `SUM(qty_net)` | Quantity ordered, net of cancellations (same as `units_sold` of `sales_items`). |
+| `units_requested` | number | `SUM(qty_requested_rma)` | Quantity requested for return on the order item, over all its requests, made at any time. |
+| `unit_return_rate` | percent | `units_requested / units_ordered` | Share of the ordered units requested for return. A lower value is an improvement. |
+| `orders` | integer | `COUNT DISTINCT(order_id)` | Distinct orders contributing item rows. |
+
+Dimensions: `order_date`, `store_id`, `customer_group_id`, `sku`, `parent_sku`, `product_id`, `category_id` (non-additive).
+
+#### Presets
+
+| Preset | Dataset | Period / comparison | Shows | Chart |
+|---|---|---|---|---|
+| `returns_overview` | `rma_requests` | last 30 days / previous period | Requests, orders with requests, units, withdrawals, returns after shipment, open and rejected requests, days to request, per day | line |
+| `withdrawals_vs_returns` | `rma_requests` | last 30 days | Requests, units, days from order and from shipment per request type | doughnut |
+| `withdrawals_trend` | `rma_requests` | last 30 days | Withdrawals, returns after shipment, mixed requests and withdrawal share per day | grouped bars |
+| `returns_by_reason` | `rma_requests` | last 30 days | Requests, units, withdrawals and returns after shipment per reason | horizontal bars |
+| `returns_by_status` | `rma_requests` | last 30 days | Requests and units per current status | horizontal bars |
+| `returns_by_resolution` | `rma_requests` | last 30 days | Requests and units per resolution | doughnut |
+| `open_return_requests` | `rma_requests` | last 30 days | Open requests (request number, status, date) with their units | bars per day |
+| `top_returned_products` | `rma_items` | last 30 days | Units, requested value and requests per product (parent SKU, alternate SKU) | horizontal bars |
+| `returns_by_condition` | `rma_items` | last 30 days | Units and requests per item condition | doughnut |
+| `product_return_rate` | `order_item_returns` | last 30 days | Units ordered, units requested and unit return rate per product (parent SKU, alternate SKU) | horizontal bars |
+| `unit_return_rate_trend` | `order_item_returns` | year to date / previous year | Units ordered, units requested and unit return rate per month | line |
+| `order_return_rate` | `order_returns` | year to date / previous year | Orders, orders with requests, requests, rates and orders by type per month | line |
+| `returns_by_shipping_country` | `order_returns` | year to date | Orders, orders with requests and order return rate per shipping country | horizontal bars |
+
+#### Attribution and freshness
+
+- `rma_requests` and `rma_items` are dated by the request creation date and scoped by the request store.
+- `order_returns` and `order_item_returns` are dated by the order date (orders and units of the period) and count the
+  requests on those orders whenever they were made, also after the period: past periods change when new requests are
+  created, and recent periods grow as their orders receive requests.
+- Requests are counted in any status (including rejected and canceled by customer); the status metrics and the
+  `status_id` dimension use the current status, not the status at the end of the period.
+- Quantities are the requested ones (`qty_requested`), not approved or received quantities.
+- Cache: the four datasets always use the open-period cache TTL (`cache_ttl_open_period`), whatever the period,
+  because status changes and later requests change past results.
+- Customer emails and request numbers are exposed (`customer_email`, `increment_id` dimensions): personal data.
+
 ### Customer dimensions
 
 Five customer dimensions are available on `sales_orders`, `customer_orders` and `customers`.
@@ -299,6 +441,13 @@ validated against `etc/report_datasets.xsd` and by `DefinitionValidator`. In dev
 throws an exception listing the errors; in production it is dropped and logged (an invalid field or metric
 drops only that element, an invalid dataset drops the dataset and its presets), so a broken extension never takes
 down the other reports.
+
+The return datasets (`rma_requests`, `rma_items`, `order_returns`, `order_item_returns`) are not in
+`report_datasets.xml`: they live in `etc/report_datasets_rma.xml`, a separate file (same format and schemas, cached
+as `advanced_report_datasets_rma`) read only while `MageOS_RMA` is enabled. A module extends them, or adds presets on
+them, in its own `etc/report_datasets_rma.xml`, merged by `code` in the same way. Do not reference them from
+`report_datasets.xml`: there they do not exist while `MageOS_RMA` is disabled, and while it is enabled the RMA
+definition of a dataset replaces the one of `report_datasets.xml` as a whole.
 
 ### Step by step
 
@@ -380,7 +529,7 @@ Attribute reference:
 
 | Element | Attributes |
 |---|---|
-| `dataset` | `code`; for a new dataset also `label`, `acl` (ACL resource checked by the data endpoint), `area` (`sales`, `catalog`, `customers`, `carts`, `marketing`), optional `dateless="true"` for snapshot datasets without `created_at`. Children: `<source name="mysql" table="..." alias="main"/>` (or `provider="..."`), `<implicitFilter code="counted_status"/>`, joins, fields, metrics, dimensions. |
+| `dataset` | `code`; for a new dataset also `label`, `acl` (ACL resource checked by the data endpoint), `area` (`sales`, `catalog`, `customers`, `carts`, `marketing`, `returns`), optional `dateless="true"` for snapshot datasets without `created_at`. Children: `<source name="mysql" table="..." alias="main"/>` (or `provider="..."`), `<implicitFilter code="counted_status"/>`, joins, fields, metrics, dimensions. |
 | `join` | `code`, `table`, `alias`, `condition`, optional `type` (`left` default, `inner`) and `requires` (comma-separated join codes this join depends on) and `cardinality` (`one` default, `many` for one-to-many joins that can multiply rows and inflate aggregates). |
 | `field` | `code`, `label`, `type` (`money`, `integer`, `decimal`, `boolean`, `string`, `id`, `date`), optional `description`. Child `<mysql expression="..." joins="a,b"/>` or `<mysql expressionProvider="name"/>`. |
 | `metric` | `code`, `label`, `format` (`money`, `number`, `percent`, `integer`), `description`, `lowerIsBetter` (colours the comparison delta), `hidden` (formula helper not shown in the picker). Either `aggregate` (`sum`, `count`, `count_distinct`, `min`, `max`, `avg`) + `field` + optional `condition` (a boolean field), or `formula`, or `virtual="true"` (value supplied by a preset query). |
@@ -462,6 +611,7 @@ When XML is not enough, register a class in `di.xml`:
 | A dataset whose base is not a single table (e.g. a union or a derived select) | `MageOS\AdvancedReport\Model\DataSource\Mysql\BaseSelectProviderInterface`, referenced by `<source name="mysql" provider="Class"/>` | `SelectBuilder` argument `baseSelectProviders`, keyed by class name (see `StockSelectProvider`) |
 | A report that is not a single aggregation (anti-joins, rolling windows, two-step queries) | `MageOS\AdvancedReport\Api\PresetQueryInterface`, referenced by `<preset presetQuery="Class">`; may fill `virtual` metrics | `PresetQueryPool` argument `presetQueries`, keyed by class name (see `LowStockCoverageQuery`) |
 | Definitions generated from data or configuration (e.g. one dimension per product attribute) | `MageOS\AdvancedReport\Model\Definition\DatasetExtenderInterface` or `PresetExtenderInterface` | `DefinitionRegistry` arguments `datasetExtenders` / `presetExtenders` (see `AttributeJoinProvider`) |
+| Whole datasets and presets loaded only under a condition (e.g. another module enabled) | `MageOS\AdvancedReport\Model\Definition\DefinitionSourceInterface`, returning the converted `['datasets' => [...], 'presets' => [...]]` array (merged over `report_datasets.xml` by code, one level deep) | `DefinitionRegistry` argument `definitionSources` (see `RmaDefinitionSource`) |
 
 Table names inside an expression provider or a preset query must be resolved with
 `MageOS\AdvancedReport\Model\DataSource\Mysql\ReportConnection::getTableName()`. The adapter's own
@@ -581,7 +731,7 @@ In short:
   index usage with `advanced-report:explain` on production-size data.
 - **Result cache**: the `advanced_report` cache type, TTL-only freshness: periods including today expire after
   `cache_ttl_open_period` (5 minutes), all others (and reports without a date range, such as stock) after
-  `cache_ttl_closed_period` (24 hours). `Refresh`, saving the configuration section and `bin/magento cache:clean advanced_report` bypass or empty it.
+  `cache_ttl_closed_period` (24 hours). The cart and return datasets always use `cache_ttl_open_period`. `Refresh`, saving the configuration section and `bin/magento cache:clean advanced_report` bypass or empty it.
 - **Guardrails**: every report statement carries a timeout (`query_timeout_ms`; on timeout the admin sees a message
   instead of a hanging page), results above `max_rows` are truncated with a warning, the CSV export is one execution
   capped at `max_rows`, and an unreachable report connection returns HTTP 503.
@@ -592,13 +742,15 @@ In short:
   PHP, which is slower and cannot serve `count_distinct`/`avg` metrics by date.
 - **Heavier reports**: new vs returning customers (first-order lookup, limited to 12 months on MySQL), customer value
   (`COUNT DISTINCT` over emails), sales by category (one row per product category) and the dead stock / never sold
-  presets (anti-joins on `sales_order_item`). Prefer shorter periods on very large catalogs or order tables.
+  presets (anti-joins on `sales_order_item`), the return request type (correlated lookups of `sales_shipment_item` by
+  `order_item_id`, a column without a native index) and `order_returns` / `order_item_returns` (one correlated lookup of
+  the RMA tables per order or order item of the period). Prefer shorter periods on very large catalogs or order tables.
 - **After upgrading**: constructors changed, so regenerate the generated code (`setup:di:compile` in production, clear
   `generated/` in developer mode) and run `setup:upgrade` for the new indexes (risk R33 in the [risk register](docs/risk-register.md)).
 
 ## Security and permissions
 
-Access is enforced server-side: a dataset needs its module ACL (`sales`, `catalog`, `customers`, `carts`, `marketing`) **and** the core ACL of
+Access is enforced server-side: a dataset needs its module ACL (`sales`, `catalog`, `customers`, `carts`, `marketing`, `returns`) **and** the core ACL of
 its entity. Full functionality needs these core resources:
 
 - `Magento_Sales::sales_order` (`sales_orders`, `customer_orders`, `sales_items`)
@@ -606,6 +758,7 @@ its entity. Full functionality needs these core resources:
 - `Magento_Catalog::products` (`catalog_stock`)
 - `Magento_InventoryApi::stock` (`catalog_salable`, MSI only)
 - `Magento_Reports::abandoned` **and** `Magento_Sales::sales_order` (`carts`, `cart_items`; module ACL `MageOS_AdvancedReport::carts`). The cart datasets list customer emails.
+- `MageOS_RMA::rma_manage` **and** `Magento_Sales::sales_order` (`rma_requests`, `rma_items`, `order_returns`, `order_item_returns`; module ACL `MageOS_AdvancedReport::returns`; only while `MageOS_RMA` is enabled). The return request datasets list customer emails.
 - `MageOS_AdvancedReport::marketing` (area `marketing`): datasets contributed by add-on modules such as `MageOS_GoogleAdvancedReport`, which declare their own core ACL (for example `Magento_Sales::sales_order` for the GA4 reconciliation).
 
 `dead_stock` and `never_sold` also need the `sales_items` permission (they read order items). Birth date and gender fields need `Magento_Sales::actions_view` on the order datasets and `Magento_Customer::manage` on `customers` (field level ACL). An owner who lost a dataset permission can still delete their own saved report.
@@ -621,6 +774,7 @@ The full list with severity and owner is in the [risk register](docs/risk-regist
 - **Product types and dimensions**: bundle products are one line (R06); a multiselect attribute dimension is bucketed by its raw stored value (R07); `category_id` is a fan-out dimension, totals may not equal the sum of the rows (R01).
 - **Customers**: new vs returning counts a guest later registered (a registered order after a guest order with the same email is new), or a customer who changes email, twice (R08, R14, R28); accounts with `store_id` 0 or a deleted store are excluded when stores are filtered (R15); large lists are capped by `max_rows` (R16); an unmatched gender value is shown raw (R09).
 - **Inventory**: stock value uses the default-scope price and cost (R10); without MSI there is no `catalog_salable` dataset, reserved quantity or source dimension (R27); multi-stock salable quantities are covered only by unit tests, an accepted risk (R26).
+- **Returns** (`MageOS_RMA` only): the request type is decided on the shipments created before the request, delivery is not tracked; mixed requests are a separate type; order based return reports attribute orders and units to the order date and count requests whenever they were made; statuses are the current ones. See [Returns](#returns-mageos_rma).
 - **Compatibility**: `Magento_Reports` is a hard dependency (R11); Magento Open Source / Mage-OS only, Adobe Commerce `row_id` is unsupported (R12).
 - **Freshness and security**: results are cached with TTL-only freshness (R18, R21, R44); roles that only had a module dataset ACL need the matching core ACL after the upgrade (R29); no website-scoped admin roles (R30).
 - **Comparisons**: previous period is the same number of calendar days before the range (the preceding whole months when the range is whole months); previous year is the same calendar dates (29 February becomes 28 February). Rows are aligned only with a single date dimension; with another dimension next to a date the comparison values are empty. Comparison rows are not gap filled, there is no quarter granularity and metrics cannot be filtered. Details in [time and currency](docs/time-and-currency.md#comparison-periods).

@@ -16,7 +16,7 @@ composer test:phpstan     # phpstan analyse --memory-limit=1G
 composer test:cs-fixer    # php-cs-fixer dry run (--allow-risky=yes); phpcs is not used
 composer test:rector      # rector process --dry-run
 composer test:phpmd       # phpmd with phpmd.xml
-composer test:xml         # XSD validation (php dev/validate-xml.php)
+composer test:xml         # XSD validation of report_datasets.xml and report_datasets_rma.xml (php dev/validate-xml.php)
 composer test             # all of the above in sequence
 
 npm install --no-audit --no-fund
@@ -24,6 +24,11 @@ npm run lint              # ESLint on view/ (npm run lint:fix to autofix)
 ```
 
 There are no JavaScript unit tests; ESLint and manual checks only.
+
+The return (RMA) definitions in `etc/report_datasets_rma.xml` are covered by `composer test:xml` and by
+`Test/Unit/Etc/ReturnDatasetsTest`, which loads `report_datasets.xml` and `report_datasets_rma.xml` through the real
+Reader/Converter/DefinitionFactory/DefinitionValidator pipeline and checks the four return datasets, the 13 return
+presets with their chart types and that the core datasets are still there.
 
 ## Local unit and integration tests (Docker project)
 
