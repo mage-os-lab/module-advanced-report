@@ -14,6 +14,7 @@ use MageOS\AdvancedReport\Model\Rma\Label\RmaItemConditionLabelResolver;
 use MageOS\AdvancedReport\Model\Rma\Label\RmaReasonLabelResolver;
 use MageOS\AdvancedReport\Model\Rma\Label\RmaResolutionTypeLabelResolver;
 use MageOS\AdvancedReport\Model\Rma\Label\RmaStatusLabelResolver;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(RmaReasonLabelResolver::class)]
 #[CoversClass(RmaResolutionTypeLabelResolver::class)]
 #[CoversClass(RmaItemConditionLabelResolver::class)]
+#[AllowMockObjectsWithoutExpectations]
 final class RmaLookupLabelResolverTest extends TestCase
 {
     /**
