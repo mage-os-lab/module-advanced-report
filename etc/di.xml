@@ -495,4 +495,7 @@
             </argument>
         </arguments>
     </type>
+    <type name="Magento\Framework\Acl\AclResource\ProviderInterface">
+        <plugin name="mageos_advancedreport_hide_returns_acl" type="MageOS\AdvancedReport\Model\Rma\Plugin\ReturnsAclResourcePlugin"/>
+    </type>
 </config>
