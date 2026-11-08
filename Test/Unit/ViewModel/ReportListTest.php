@@ -263,12 +263,40 @@ final class ReportListTest extends TestCase
         self::assertArrayHasKey('sales', $areas);
     }
 
+    public function testItLabelsAndDescribesAnAreaDeclaredThroughTheConstructorArguments(): void
+    {
+        $areas = $this->build(
+            [$this->preset('r', 'returns', 'rma_requests')],
+            [],
+            ['MageOS_AdvancedReport::returns'],
+            areaLabels: ['returns' => 'Returns'],
+            areaDescriptions: ['returns' => 'Ready-made return reports.'],
+        )->getAreas();
+
+        self::assertSame('Returns', (string)$areas['returns']['label']);
+        self::assertSame('Ready-made return reports.', (string)$areas['returns']['description']);
+    }
+
+    public function testTheConstructorArgumentsOverrideTheBuiltInAreaLabels(): void
+    {
+        $areas = $this->build(
+            [$this->preset('a', 'sales', 'sales_orders')],
+            [],
+            ['MageOS_AdvancedReport::sales'],
+            areaLabels: ['sales' => 'Orders'],
+        )->getAreas();
+
+        self::assertSame('Orders', (string)$areas['sales']['label']);
+    }
+
     /**
      * @param Preset[] $presets
      * @param SavedReportInterface[] $saved
      * @param string[] $allowed
      * @param string[] $denied dataset codes whose core resource is denied
      * @param string[] $deniedPresets preset codes whose extra datasets are denied
+     * @param array<string,string> $areaLabels
+     * @param array<string,string> $areaDescriptions
      */
     private function build(
         array $presets,
@@ -276,6 +304,8 @@ final class ReportListTest extends TestCase
         array $allowed,
         array $denied = [],
         array $deniedPresets = [],
+        array $areaLabels = [],
+        array $areaDescriptions = [],
     ): ReportList {
         $datasets = [
             'sales_orders' => 'MageOS_AdvancedReport::sales',
@@ -284,9 +314,11 @@ final class ReportListTest extends TestCase
             'customer_orders' => 'MageOS_AdvancedReport::customers',
             'quote_carts' => 'MageOS_AdvancedReport::carts',
             'ga_traffic' => 'MageOS_AdvancedReport::marketing',
+            'rma_requests' => 'MageOS_AdvancedReport::returns',
         ];
         $areaOf = ['sales_orders' => 'sales', 'sales_items' => 'catalog', 'catalog_stock' => 'catalog',
-            'customer_orders' => 'customers', 'quote_carts' => 'carts', 'ga_traffic' => 'marketing'];
+            'customer_orders' => 'customers', 'quote_carts' => 'carts', 'ga_traffic' => 'marketing',
+            'rma_requests' => 'returns'];
         $registry = $this->createStub(DefinitionRegistry::class);
         $registry->method('getPresets')->willReturn($presets);
         $registry->method('getDataset')->willReturnCallback(
@@ -327,7 +359,7 @@ final class ReportListTest extends TestCase
             static fn (string $path, array $params): string => $path . '?' . http_build_query($params)
         );
 
-        return new ReportList($registry, $repository, $datasetAccess, $session, $url);
+        return new ReportList($registry, $repository, $datasetAccess, $session, $url, $areaLabels, $areaDescriptions);
     }
 
     private function preset(string $code, string $area, string $dataset, string $description = ''): Preset

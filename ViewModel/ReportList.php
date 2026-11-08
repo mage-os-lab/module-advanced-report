@@ -42,6 +42,8 @@ class ReportList implements ArgumentInterface
      * @param DatasetAccess $datasetAccess
      * @param Session $authSession
      * @param UrlInterface $urlBuilder
+     * @param array<string,string> $areaLabels
+     * @param array<string,string> $areaDescriptions
      */
     public function __construct(
         private readonly DefinitionRegistry $registry,
@@ -49,6 +51,8 @@ class ReportList implements ArgumentInterface
         private readonly DatasetAccess $datasetAccess,
         private readonly Session $authSession,
         private readonly UrlInterface $urlBuilder,
+        protected readonly array $areaLabels = [],
+        protected readonly array $areaDescriptions = [],
     ) {
     }
 
@@ -119,9 +123,11 @@ class ReportList implements ArgumentInterface
      */
     private function emptyArea(string $area): array
     {
+        $description = $this->areaDescriptions[$area] ?? self::AREA_DESCRIPTIONS[$area] ?? null;
+
         return [
-            'label' => (string) __(self::AREA_LABELS[$area] ?? ucfirst($area)),
-            'description' => isset(self::AREA_DESCRIPTIONS[$area]) ? (string) __(self::AREA_DESCRIPTIONS[$area]) : '',
+            'label' => (string) __($this->areaLabels[$area] ?? self::AREA_LABELS[$area] ?? ucfirst($area)),
+            'description' => $description !== null ? (string) __($description) : '',
             'presets' => [],
             'saved' => [],
         ];
