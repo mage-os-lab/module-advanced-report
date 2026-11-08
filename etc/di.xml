@@ -18,6 +18,22 @@
             <argument name="cache" xsi:type="object">Magento\Framework\App\Cache\Type\Config</argument>
         </arguments>
     </type>
+    <type name="MageOS\AdvancedReport\Model\Rma\Config\Reader">
+        <arguments>
+            <argument name="schemaLocator" xsi:type="object">MageOS\AdvancedReport\Model\Config\SchemaLocator</argument>
+        </arguments>
+    </type>
+    <type name="MageOS\AdvancedReport\Model\Rma\Config\Data">
+        <arguments>
+            <argument name="reader" xsi:type="object">MageOS\AdvancedReport\Model\Rma\Config\Reader\Proxy</argument>
+            <argument name="cache" xsi:type="object">Magento\Framework\App\Cache\Type\Config</argument>
+        </arguments>
+    </type>
+    <type name="MageOS\AdvancedReport\Model\Rma\Config\RmaDefinitionSource">
+        <arguments>
+            <argument name="data" xsi:type="object">MageOS\AdvancedReport\Model\Rma\Config\Data\Proxy</argument>
+        </arguments>
+    </type>
     <type name="MageOS\AdvancedReport\Model\Definition\DefinitionRegistry">
         <arguments>
             <argument name="configData" xsi:type="object">MageOS\AdvancedReport\Model\Config\Data</argument>
@@ -29,6 +45,9 @@
             </argument>
             <argument name="datasetAvailability" xsi:type="array">
                 <item name="msi" xsi:type="object">MageOS\AdvancedReport\Model\Stock\MsiDatasetAvailability</item>
+            </argument>
+            <argument name="definitionSources" xsi:type="array">
+                <item name="rma" xsi:type="object">MageOS\AdvancedReport\Model\Rma\Config\RmaDefinitionSource</item>
             </argument>
         </arguments>
     </type>
@@ -119,6 +138,41 @@
             <argument name="childrenExpression" xsi:type="string">COALESCE(main.qty_ordered, 0) * (1 - COALESCE(MAX(COALESCE(bc.qty_canceled, 0) / COALESCE(NULLIF(bc.qty_ordered, 0), 1)), 0))</argument>
         </arguments>
     </virtualType>
+    <virtualType name="MageOS\AdvancedReport\Model\Rma\FieldExpression\IsWithdrawalExpression" type="MageOS\AdvancedReport\Model\Rma\FieldExpression\RequestTypeFlagExpression">
+        <arguments>
+            <argument name="type" xsi:type="string">withdrawal</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MageOS\AdvancedReport\Model\Rma\FieldExpression\IsReturnAfterShipmentExpression" type="MageOS\AdvancedReport\Model\Rma\FieldExpression\RequestTypeFlagExpression">
+        <arguments>
+            <argument name="type" xsi:type="string">return</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MageOS\AdvancedReport\Model\Rma\FieldExpression\IsMixedRequestExpression" type="MageOS\AdvancedReport\Model\Rma\FieldExpression\RequestTypeFlagExpression">
+        <arguments>
+            <argument name="type" xsi:type="string">mixed</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MageOS\AdvancedReport\Model\Rma\FieldExpression\ItemIsWithdrawalExpression" type="MageOS\AdvancedReport\Model\Rma\FieldExpression\ItemShippedFlagExpression">
+        <arguments>
+            <argument name="shipped" xsi:type="boolean">false</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MageOS\AdvancedReport\Model\Rma\FieldExpression\ItemIsReturnAfterShipmentExpression" type="MageOS\AdvancedReport\Model\Rma\FieldExpression\ItemShippedFlagExpression">
+        <arguments>
+            <argument name="shipped" xsi:type="boolean">true</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderHasWithdrawalExpression" type="MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderRequestStageExpression">
+        <arguments>
+            <argument name="shipped" xsi:type="boolean">false</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderHasReturnAfterShipmentExpression" type="MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderRequestStageExpression">
+        <arguments>
+            <argument name="shipped" xsi:type="boolean">true</argument>
+        </arguments>
+    </virtualType>
     <type name="MageOS\AdvancedReport\Model\DataSource\Mysql\FieldExpressionResolver">
         <arguments>
             <argument name="providers" xsi:type="array">
@@ -140,6 +194,21 @@
                 <item name="cart_customer_email" xsi:type="object">MageOS\AdvancedReport\Model\DataSource\Mysql\FieldExpression\CartCustomerEmailExpression</item>
                 <item name="cart_state" xsi:type="object">MageOS\AdvancedReport\Model\DataSource\Mysql\FieldExpression\CartStateExpression</item>
                 <item name="cart_items_state" xsi:type="object">MageOS\AdvancedReport\Model\DataSource\Mysql\FieldExpression\CartItemsStateExpression</item>
+                <item name="rma_request_type" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\RequestTypeExpression</item>
+                <item name="rma_is_withdrawal" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\IsWithdrawalExpression</item>
+                <item name="rma_is_return_after_shipment" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\IsReturnAfterShipmentExpression</item>
+                <item name="rma_is_mixed_request" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\IsMixedRequestExpression</item>
+                <item name="rma_request_units" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\RequestUnitsExpression</item>
+                <item name="rma_days_from_shipment" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\DaysFromShipmentExpression</item>
+                <item name="rma_item_request_type" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\ItemRequestTypeExpression</item>
+                <item name="rma_item_is_withdrawal" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\ItemIsWithdrawalExpression</item>
+                <item name="rma_item_is_return_after_shipment" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\ItemIsReturnAfterShipmentExpression</item>
+                <item name="rma_item_requested_value" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\ItemRequestedValueExpression</item>
+                <item name="rma_order_has_request" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderHasRequestExpression</item>
+                <item name="rma_order_request_count" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderRequestCountExpression</item>
+                <item name="rma_order_has_withdrawal" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderHasWithdrawalExpression</item>
+                <item name="rma_order_has_return_after_shipment" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderHasReturnAfterShipmentExpression</item>
+                <item name="rma_order_item_units_requested" xsi:type="object">MageOS\AdvancedReport\Model\Rma\FieldExpression\OrderItemUnitsRequestedExpression</item>
             </argument>
         </arguments>
     </type>
@@ -224,6 +293,10 @@
             <argument name="timeRelativeDatasets" xsi:type="array">
                 <item name="carts" xsi:type="string">carts</item>
                 <item name="cart_items" xsi:type="string">cart_items</item>
+                <item name="rma_requests" xsi:type="string">rma_requests</item>
+                <item name="rma_items" xsi:type="string">rma_items</item>
+                <item name="order_returns" xsi:type="string">order_returns</item>
+                <item name="order_item_returns" xsi:type="string">order_item_returns</item>
             </argument>
         </arguments>
     </type>
@@ -253,6 +326,11 @@
                 <item name="MageOS\AdvancedReport\Model\Label\GenderLabelResolver" xsi:type="object">MageOS\AdvancedReport\Model\Label\GenderLabelResolver</item>
                 <item name="MageOS\AdvancedReport\Model\Label\CartStateLabelResolver" xsi:type="object">MageOS\AdvancedReport\Model\Label\CartStateLabelResolver</item>
                 <item name="MageOS\AdvancedReport\Model\Label\GuestLabelResolver" xsi:type="object">MageOS\AdvancedReport\Model\Label\GuestLabelResolver</item>
+                <item name="MageOS\AdvancedReport\Model\Rma\Label\RmaStatusLabelResolver" xsi:type="object">MageOS\AdvancedReport\Model\Rma\Label\RmaStatusLabelResolver</item>
+                <item name="MageOS\AdvancedReport\Model\Rma\Label\RmaReasonLabelResolver" xsi:type="object">MageOS\AdvancedReport\Model\Rma\Label\RmaReasonLabelResolver</item>
+                <item name="MageOS\AdvancedReport\Model\Rma\Label\RmaResolutionTypeLabelResolver" xsi:type="object">MageOS\AdvancedReport\Model\Rma\Label\RmaResolutionTypeLabelResolver</item>
+                <item name="MageOS\AdvancedReport\Model\Rma\Label\RmaItemConditionLabelResolver" xsi:type="object">MageOS\AdvancedReport\Model\Rma\Label\RmaItemConditionLabelResolver</item>
+                <item name="MageOS\AdvancedReport\Model\Rma\Label\RmaRequestTypeLabelResolver" xsi:type="object">MageOS\AdvancedReport\Model\Rma\Label\RmaRequestTypeLabelResolver</item>
             </argument>
         </arguments>
     </type>
@@ -380,6 +458,22 @@
                     <item name="abandoned" xsi:type="string">Magento_Reports::abandoned</item>
                     <item name="sales_order" xsi:type="string">Magento_Sales::sales_order</item>
                 </item>
+                <item name="rma_requests" xsi:type="array">
+                    <item name="rma_manage" xsi:type="string">MageOS_RMA::rma_manage</item>
+                    <item name="sales_order" xsi:type="string">Magento_Sales::sales_order</item>
+                </item>
+                <item name="rma_items" xsi:type="array">
+                    <item name="rma_manage" xsi:type="string">MageOS_RMA::rma_manage</item>
+                    <item name="sales_order" xsi:type="string">Magento_Sales::sales_order</item>
+                </item>
+                <item name="order_returns" xsi:type="array">
+                    <item name="rma_manage" xsi:type="string">MageOS_RMA::rma_manage</item>
+                    <item name="sales_order" xsi:type="string">Magento_Sales::sales_order</item>
+                </item>
+                <item name="order_item_returns" xsi:type="array">
+                    <item name="rma_manage" xsi:type="string">MageOS_RMA::rma_manage</item>
+                    <item name="sales_order" xsi:type="string">Magento_Sales::sales_order</item>
+                </item>
             </argument>
             <argument name="presetDatasets" xsi:type="array">
                 <item name="dead_stock" xsi:type="array">
@@ -388,6 +482,16 @@
                 <item name="never_sold" xsi:type="array">
                     <item name="sales_items" xsi:type="string">sales_items</item>
                 </item>
+            </argument>
+        </arguments>
+    </type>
+    <type name="MageOS\AdvancedReport\ViewModel\ReportList">
+        <arguments>
+            <argument name="areaLabels" xsi:type="array">
+                <item name="returns" xsi:type="string">Returns</item>
+            </argument>
+            <argument name="areaDescriptions" xsi:type="array">
+                <item name="returns" xsi:type="string">Ready-made return reports: return requests, withdrawals before shipment, returns after shipment, reasons, returned products and return rates.</item>
             </argument>
         </arguments>
     </type>

@@ -164,7 +164,7 @@ final class I18nCoverageTest extends TestCase
         $xpath = new DOMXPath($document);
         $phrases = [];
 
-        if (str_ends_with($file, 'report_datasets.xml')) {
+        if (str_ends_with($file, 'report_datasets.xml') || str_ends_with($file, 'report_datasets_rma.xml')) {
             foreach (self::queryNodes($xpath, '//*[@label or @description]') as $node) {
                 self::assertInstanceOf(DOMElement::class, $node);
                 $phrases[] = $node->getAttribute('label');

@@ -23,6 +23,15 @@ final class XsdValidatorTest extends TestCase
         self::assertSame([], $errors);
     }
 
+    public function testItReportsNoErrorsForTheShippedReportDatasetsRmaXmlAgainstBothSchemas(): void
+    {
+        foreach ([self::ETC . '/report_datasets_file.xsd', self::ETC . '/report_datasets.xsd'] as $xsd) {
+            $errors = (new XsdValidator())->validateFile(self::ETC . '/report_datasets_rma.xml', $xsd);
+
+            self::assertSame([], $errors, $xsd);
+        }
+    }
+
     public function testItReportsAnErrorForAJoinWithUnknownCardinalityValue(): void
     {
         $errors = $this->validateXml(
@@ -60,6 +69,23 @@ final class XsdValidatorTest extends TestCase
     {
         $errors = $this->validateXml(
             '<config><dataset code="a" label="A" acl="MageOS_AdvancedReport::marketing" area="marketing"/></config>',
+            self::ETC . '/report_datasets.xsd'
+        );
+
+        self::assertSame([], $errors);
+    }
+
+    public function testDatasetFileWithReturnsAreaValidatesAgainstFileSchema(): void
+    {
+        $errors = $this->validateXml('<config><dataset code="a" label="A" acl="MageOS_AdvancedReport::returns" area="returns"/></config>');
+
+        self::assertSame([], $errors);
+    }
+
+    public function testMergedDefinitionWithReturnsAreaValidatesAgainstMergedSchema(): void
+    {
+        $errors = $this->validateXml(
+            '<config><dataset code="a" label="A" acl="MageOS_AdvancedReport::returns" area="returns"/></config>',
             self::ETC . '/report_datasets.xsd'
         );
 

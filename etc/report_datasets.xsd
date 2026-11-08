@@ -66,6 +66,7 @@
             <xs:enumeration value="customers"/>
             <xs:enumeration value="carts"/>
             <xs:enumeration value="marketing"/>
+            <xs:enumeration value="returns"/>
         </xs:restriction>
     </xs:simpleType>
 

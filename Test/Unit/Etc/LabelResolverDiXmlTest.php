@@ -12,6 +12,11 @@ use MageOS\AdvancedReport\Model\Label\CustomerLabelResolver;
 use MageOS\AdvancedReport\Model\Label\GenderLabelResolver;
 use MageOS\AdvancedReport\Model\Label\GuestLabelResolver;
 use MageOS\AdvancedReport\Model\Label\MonthLabelResolver;
+use MageOS\AdvancedReport\Model\Rma\Label\RmaItemConditionLabelResolver;
+use MageOS\AdvancedReport\Model\Rma\Label\RmaReasonLabelResolver;
+use MageOS\AdvancedReport\Model\Rma\Label\RmaRequestTypeLabelResolver;
+use MageOS\AdvancedReport\Model\Rma\Label\RmaResolutionTypeLabelResolver;
+use MageOS\AdvancedReport\Model\Rma\Label\RmaStatusLabelResolver;
 use MageOS\AdvancedReport\Test\Unit\Helper\XPathTestTrait;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -31,6 +36,11 @@ final class LabelResolverDiXmlTest extends TestCase
             'gender' => [GenderLabelResolver::class],
             'cart state' => [CartStateLabelResolver::class],
             'guest' => [GuestLabelResolver::class],
+            'rma status' => [RmaStatusLabelResolver::class],
+            'rma reason' => [RmaReasonLabelResolver::class],
+            'rma resolution type' => [RmaResolutionTypeLabelResolver::class],
+            'rma item condition' => [RmaItemConditionLabelResolver::class],
+            'rma request type' => [RmaRequestTypeLabelResolver::class],
         ];
     }
 
