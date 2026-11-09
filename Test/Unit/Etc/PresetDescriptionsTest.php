@@ -20,4 +20,17 @@ final class PresetDescriptionsTest extends TestCase
             self::assertNotSame('', trim((string) $preset['description']), (string) $preset['code']);
         }
     }
+
+    public function testItGivesEveryRmaPresetADescription(): void
+    {
+        $xml = simplexml_load_string((string) file_get_contents(__DIR__ . '/../../../etc/report_datasets_rma.xml'));
+        self::assertNotFalse($xml);
+
+        $presets = $xml->xpath('//preset');
+        self::assertIsArray($presets);
+        self::assertCount(13, $presets);
+        foreach ($presets as $preset) {
+            self::assertNotSame('', trim((string) $preset['description']), (string) $preset['code']);
+        }
+    }
 }

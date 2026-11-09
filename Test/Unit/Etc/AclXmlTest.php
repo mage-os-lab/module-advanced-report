@@ -45,6 +45,7 @@ final class AclXmlTest extends TestCase
                 'MageOS_AdvancedReport::customers',
                 'MageOS_AdvancedReport::carts',
                 'MageOS_AdvancedReport::marketing',
+                'MageOS_AdvancedReport::returns',
                 'MageOS_AdvancedReport::saved_manage',
                 'MageOS_AdvancedReport::saved_share',
                 'MageOS_AdvancedReport::export',

@@ -160,3 +160,74 @@ Fan-out dimensions: none
 | `searches_no_results` | Searches without results | aggregate | sum | `main.popularity` |  |  | timezone |
 | `no_results_rate` | Searches without results (%) | derived |  | `searches_no_results / searches` |  |  | timezone |
 | `avg_results` | Average results per term | aggregate | avg | `main.num_results` |  |  | timezone |
+
+## rma_requests (Return requests)
+
+Base table: `rma_entity`
+
+Fan-out dimensions: none
+
+| Metric | Label | Kind | Aggregate | Expression | Joins | Fan-out | Depends on |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `requests` | Return requests | aggregate | count | `main.entity_id` |  |  | timezone |
+| `orders_with_requests` | Orders with return requests | aggregate | count_distinct | `main.order_id` |  |  | timezone |
+| `customers_with_requests` | Customers with return requests | aggregate | count_distinct | `LOWER(TRIM(main.customer_email))` |  |  | timezone |
+| `requests_per_order` | Requests per order | derived |  | `requests / orders_with_requests` |  |  | timezone |
+| `units_requested` | Units requested | aggregate | sum | `provider:rma_request_units` |  |  | timezone |
+| `withdrawals` | Withdrawals before shipment | aggregate | sum | `provider:rma_is_withdrawal` |  |  | timezone |
+| `returns_after_shipment` | Returns after shipment | aggregate | sum | `provider:rma_is_return_after_shipment` |  |  | timezone |
+| `mixed_requests` | Mixed requests | aggregate | sum | `provider:rma_is_mixed_request` |  |  | timezone |
+| `withdrawal_share` | Withdrawal share | derived |  | `withdrawals / requests` |  |  | timezone |
+| `open_requests` | Open requests | aggregate | sum | `(rma_status.code NOT IN ('rejected', 'canceled_by_customer', 'resolved'))` | rma_status |  | timezone |
+| `rejected_requests` | Rejected requests | aggregate | sum | `(rma_status.code = 'rejected')` | rma_status |  | timezone |
+| `resolved_requests` | Resolved requests | aggregate | sum | `(rma_status.code = 'resolved')` | rma_status |  | timezone |
+| `canceled_requests` | Canceled requests | aggregate | sum | `(rma_status.code = 'canceled_by_customer')` | rma_status |  | timezone |
+| `rejection_rate` | Rejection rate | derived |  | `rejected_requests / requests` | rma_status |  | timezone |
+| `avg_days_to_request` | Avg days from order to request | aggregate | avg | `(GREATEST(0, TIMESTAMPDIFF(SECOND, order.created_at, main.created_at)) / 86400)` | order |  | timezone |
+| `avg_days_from_shipment` | Avg days from shipment to request | aggregate | avg | `provider:rma_days_from_shipment` |  |  | timezone |
+
+## rma_items (Returned items)
+
+Base table: `rma_item`
+
+Fan-out dimensions: none
+
+| Metric | Label | Kind | Aggregate | Expression | Joins | Fan-out | Depends on |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `units_requested` | Units requested | aggregate | sum | `COALESCE(main.qty_requested, 0)` |  |  | timezone |
+| `requested_value` | Requested value | aggregate | sum | `provider:rma_item_requested_value` | order_item |  | timezone, currency |
+| `requests` | Return requests | aggregate | count_distinct | `main.rma_id` |  |  | timezone |
+| `withdrawn_units` | Units withdrawn before shipment | aggregate | sum | `COALESCE(main.qty_requested, 0)` | rma |  | timezone |
+| `returned_units_after_shipment` | Units returned after shipment | aggregate | sum | `COALESCE(main.qty_requested, 0)` | rma |  | timezone |
+| `units_per_request` | Units per request | derived |  | `units_requested / requests` |  |  | timezone |
+
+## order_returns (Orders and return requests)
+
+Base table: `sales_order`
+
+Fan-out dimensions: none
+
+| Metric | Label | Kind | Aggregate | Expression | Joins | Fan-out | Depends on |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `orders` | Orders | aggregate | count | `main.entity_id` |  |  | timezone, counted_statuses |
+| `orders_with_requests` | Orders with return requests | aggregate | sum | `provider:rma_order_has_request` |  |  | timezone, counted_statuses |
+| `return_requests` | Return requests | aggregate | sum | `provider:rma_order_request_count` |  |  | timezone, counted_statuses |
+| `order_return_rate` | Order return rate | derived |  | `orders_with_requests / orders` |  |  | timezone, counted_statuses |
+| `requests_per_returned_order` | Requests per returned order | derived |  | `return_requests / orders_with_requests` |  |  | timezone, counted_statuses |
+| `orders_with_withdrawals` | Orders with withdrawals | aggregate | sum | `provider:rma_order_has_withdrawal` |  |  | timezone, counted_statuses |
+| `orders_with_returns_after_shipment` | Orders with returns after shipment | aggregate | sum | `provider:rma_order_has_return_after_shipment` |  |  | timezone, counted_statuses |
+| `withdrawal_rate` | Withdrawal rate | derived |  | `orders_with_withdrawals / orders` |  |  | timezone, counted_statuses |
+| `return_after_shipment_rate` | Return after shipment rate | derived |  | `orders_with_returns_after_shipment / orders` |  |  | timezone, counted_statuses |
+
+## order_item_returns (Ordered and returned units)
+
+Base table: `sales_order_item`
+
+Fan-out dimensions: category_id
+
+| Metric | Label | Kind | Aggregate | Expression | Joins | Fan-out | Depends on |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `units_ordered` | Units ordered | aggregate | sum | `provider:bundle_qty_net` |  | ⚠ by category_id | timezone, counted_statuses |
+| `units_requested` | Units requested | aggregate | sum | `provider:rma_order_item_units_requested` |  | ⚠ by category_id | timezone, counted_statuses |
+| `unit_return_rate` | Unit return rate | derived |  | `units_requested / units_ordered` |  | ⚠ by category_id | timezone, counted_statuses |
+| `orders` | Orders | aggregate | count_distinct | `main.order_id` |  |  | timezone, counted_statuses |

@@ -1,0 +1,637 @@
+<?xml version="1.0"?>
+<!--
+    Return (RMA) datasets and presets. This file is read only when the MageOS_RMA module is enabled
+    (Model\Rma\Config\RmaDefinitionSource) and is merged over report_datasets.xml by dataset/preset code.
+    Other modules extend these datasets and presets in their own etc/report_datasets_rma.xml.
+-->
+<config>
+    <dataset code="rma_requests" label="Return requests" acl="MageOS_AdvancedReport::returns" area="returns">
+        <source name="mysql" table="rma_entity" alias="main"/>
+
+        <join code="order" table="sales_order" alias="order" type="inner"
+              condition="order.entity_id = main.order_id"/>
+        <join code="store" table="store" alias="store" type="left"
+              condition="store.store_id = main.store_id"/>
+        <join code="rma_status" table="rma_status" alias="rma_status" type="left"
+              condition="rma_status.entity_id = main.status_id"/>
+        <join code="shipping_address" table="sales_order_address" alias="shipping_address" type="left"
+              condition="shipping_address.parent_id = main.order_id AND shipping_address.address_type = 'shipping'"/>
+
+        <!-- Reserved fields (drive date filtering/bucketing and store scope). -->
+        <field code="created_at" label="Requested at" type="date"
+               description="When the return request was created.">
+            <mysql expression="main.created_at"/>
+        </field>
+        <field code="store_id" label="Store" type="id">
+            <mysql expression="main.store_id"/>
+        </field>
+
+        <field code="rma_id" label="Return request ID" type="id">
+            <mysql expression="main.entity_id"/>
+        </field>
+        <field code="increment_id" label="Request number" type="string">
+            <mysql expression="main.increment_id"/>
+        </field>
+        <field code="order_id" label="Order ID" type="id">
+            <mysql expression="main.order_id"/>
+        </field>
+        <field code="customer_email" label="Customer email" type="string"
+               description="Lowercased, trimmed email of the customer who made the return request.">
+            <mysql expression="LOWER(TRIM(main.customer_email))"/>
+        </field>
+        <field code="is_guest" label="Is guest" type="boolean"
+               description="Whether the return request has no customer account.">
+            <mysql expression="(main.customer_id IS NULL)"/>
+        </field>
+        <field code="customer_group_id" label="Customer group" type="id"
+               description="Customer group of the order the return request refers to.">
+            <mysql expression="order.customer_group_id" joins="order"/>
+        </field>
+        <field code="website_id" label="Website" type="id">
+            <mysql expression="store.website_id" joins="store"/>
+        </field>
+        <field code="shipping_country" label="Shipping country" type="string">
+            <mysql expression="shipping_address.country_id" joins="shipping_address"/>
+        </field>
+        <field code="status_id" label="Status" type="id">
+            <mysql expression="main.status_id"/>
+        </field>
+        <field code="reason_id" label="Reason" type="id">
+            <mysql expression="main.reason_id"/>
+        </field>
+        <field code="resolution_type_id" label="Resolution" type="id">
+            <mysql expression="main.resolution_type_id"/>
+        </field>
+        <field code="request_type" label="Request type" type="string"
+               description="Withdrawal before shipment (no requested item shipped yet), return after shipment (every requested item shipped) or mixed (only some requested items shipped), decided on the shipments created before the request; delivery is not tracked.">
+            <mysql expressionProvider="rma_request_type"/>
+        </field>
+        <field code="is_withdrawal" label="Is withdrawal before shipment" type="boolean"
+               description="Whether none of the requested items had been shipped when the request was created.">
+            <mysql expressionProvider="rma_is_withdrawal"/>
+        </field>
+        <field code="is_return_after_shipment" label="Is return after shipment" type="boolean"
+               description="Whether every requested item had been shipped when the request was created.">
+            <mysql expressionProvider="rma_is_return_after_shipment"/>
+        </field>
+        <field code="is_mixed_request" label="Is mixed request" type="boolean"
+               description="Whether only some of the requested items had been shipped when the request was created.">
+            <mysql expressionProvider="rma_is_mixed_request"/>
+        </field>
+        <field code="units_requested_qty" label="Units requested" type="decimal"
+               description="Total quantity requested for return across the items of the request.">
+            <mysql expressionProvider="rma_request_units"/>
+        </field>
+        <field code="is_open" label="Is open" type="boolean"
+               description="Whether the request is still being handled: its status is not rejected, canceled by the customer or resolved.">
+            <mysql expression="(rma_status.code NOT IN ('rejected', 'canceled_by_customer', 'resolved'))" joins="rma_status"/>
+        </field>
+        <field code="is_rejected" label="Is rejected" type="boolean"
+               description="Whether the request status is rejected.">
+            <mysql expression="(rma_status.code = 'rejected')" joins="rma_status"/>
+        </field>
+        <field code="is_resolved" label="Is resolved" type="boolean"
+               description="Whether the request status is resolved.">
+            <mysql expression="(rma_status.code = 'resolved')" joins="rma_status"/>
+        </field>
+        <field code="is_canceled" label="Is canceled" type="boolean"
+               description="Whether the request status is canceled by the customer.">
+            <mysql expression="(rma_status.code = 'canceled_by_customer')" joins="rma_status"/>
+        </field>
+        <field code="days_to_request" label="Days from order to request" type="decimal"
+               description="Days between the order and the return request.">
+            <mysql expression="(GREATEST(0, TIMESTAMPDIFF(SECOND, order.created_at, main.created_at)) / 86400)" joins="order"/>
+        </field>
+        <field code="days_from_shipment" label="Days from shipment to request" type="decimal"
+               description="Days between the last shipment created before the request and the request; empty when nothing was shipped before the request.">
+            <mysql expressionProvider="rma_days_from_shipment"/>
+        </field>
+
+        <metric code="requests" label="Return requests" format="integer" aggregate="count" field="rma_id"
+                description="Number of return requests created."/>
+        <metric code="orders_with_requests" label="Orders with return requests" format="integer"
+                aggregate="count_distinct" field="order_id"
+                description="Number of distinct orders with at least one return request created in the period."/>
+        <metric code="customers_with_requests" label="Customers with return requests" format="integer"
+                aggregate="count_distinct" field="customer_email"
+                description="Number of distinct customers (by lowercased request email) who created return requests."/>
+        <metric code="requests_per_order" label="Requests per order" format="number"
+                formula="requests / orders_with_requests"
+                description="Return requests divided by the number of distinct orders with return requests."/>
+        <metric code="units_requested" label="Units requested" format="number" aggregate="sum"
+                field="units_requested_qty"
+                description="Total quantity requested for return. Limitation: this is the requested quantity, not the quantity approved or actually received."/>
+        <metric code="withdrawals" label="Withdrawals before shipment" format="integer" aggregate="sum"
+                field="is_withdrawal"
+                description="Return requests created before any of the requested items was shipped. Limitation: the request type is decided on the shipments created before the request, not on delivery."/>
+        <metric code="returns_after_shipment" label="Returns after shipment" format="integer" aggregate="sum"
+                field="is_return_after_shipment"
+                description="Return requests created after every requested item was shipped. Limitation: the request type is decided on the shipments created before the request, not on delivery."/>
+        <metric code="mixed_requests" label="Mixed requests" format="integer" aggregate="sum"
+                field="is_mixed_request"
+                description="Return requests in which only some of the requested items had been shipped when the request was created. Limitation: the request type is decided on the shipments created before the request, not on delivery."/>
+        <metric code="withdrawal_share" label="Withdrawal share" format="percent" formula="withdrawals / requests"
+                description="Withdrawals before shipment as a percentage of all return requests."/>
+        <metric code="open_requests" label="Open requests" format="integer" aggregate="sum" field="is_open"
+                lowerIsBetter="true"
+                description="Return requests whose status is not rejected, canceled by the customer or resolved. A lower value is an improvement."/>
+        <metric code="rejected_requests" label="Rejected requests" format="integer" aggregate="sum"
+                field="is_rejected"
+                description="Return requests with the rejected status."/>
+        <metric code="resolved_requests" label="Resolved requests" format="integer" aggregate="sum"
+                field="is_resolved"
+                description="Return requests with the resolved status."/>
+        <metric code="canceled_requests" label="Canceled requests" format="integer" aggregate="sum"
+                field="is_canceled"
+                description="Return requests canceled by the customer."/>
+        <metric code="rejection_rate" label="Rejection rate" format="percent"
+                formula="rejected_requests / requests" lowerIsBetter="true"
+                description="Rejected requests as a percentage of all return requests. A lower value is an improvement."/>
+        <metric code="avg_days_to_request" label="Avg days from order to request" format="number" aggregate="avg"
+                field="days_to_request"
+                description="Average days between the order and the return request."/>
+        <metric code="avg_days_from_shipment" label="Avg days from shipment to request" format="number"
+                aggregate="avg" field="days_from_shipment"
+                description="Average days between the last shipment created before the request and the request. Requests with nothing shipped before them (withdrawals) are excluded."/>
+
+        <dimension code="request_date" label="Request date" field="created_at"
+                   granularities="hour,day,week,month,year"/>
+        <dimension code="status_id" label="Status" field="status_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Rma\Label\RmaStatusLabelResolver"/>
+        <dimension code="reason_id" label="Reason" field="reason_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Rma\Label\RmaReasonLabelResolver"/>
+        <dimension code="resolution_type_id" label="Resolution" field="resolution_type_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Rma\Label\RmaResolutionTypeLabelResolver"/>
+        <dimension code="request_type" label="Request type" field="request_type"
+                   labelResolver="MageOS\AdvancedReport\Model\Rma\Label\RmaRequestTypeLabelResolver"/>
+        <dimension code="store_id" label="Store" field="store_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\StoreLabelResolver"/>
+        <dimension code="website_id" label="Website" field="website_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\WebsiteLabelResolver"/>
+        <dimension code="customer_group_id" label="Customer group" field="customer_group_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\CustomerGroupLabelResolver"/>
+        <dimension code="customer_type" label="Customer type" field="is_guest"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\GuestLabelResolver"/>
+        <dimension code="shipping_country" label="Shipping country" field="shipping_country"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\CountryLabelResolver"/>
+        <dimension code="increment_id" label="Request number" field="increment_id"/>
+        <dimension code="customer_email" label="Customer email" field="customer_email"/>
+    </dataset>
+
+    <dataset code="rma_items" label="Returned items" acl="MageOS_AdvancedReport::returns" area="returns">
+        <source name="mysql" table="rma_item" alias="main"/>
+
+        <!--
+            "rma" is mandatory: reserved fields (created_at, store_id) map to the return request row,
+            rma_item has no store and its created_at mirrors the request.
+        -->
+        <join code="rma" table="rma_entity" alias="rma" type="inner"
+              condition="rma.entity_id = main.rma_id"/>
+        <join code="order_item" table="sales_order_item" alias="order_item" type="inner"
+              condition="order_item.item_id = main.order_item_id"/>
+        <join code="order" table="sales_order" alias="order" type="inner"
+              condition="order.entity_id = rma.order_id" requires="rma"/>
+        <join code="store" table="store" alias="store" type="left"
+              condition="store.store_id = rma.store_id" requires="rma"/>
+        <join code="parent_product" table="catalog_product_entity" alias="parent_product" type="left"
+              condition="parent_product.entity_id = order_item.product_id" requires="order_item"/>
+
+        <!-- Reserved fields, mapped to the return request row. -->
+        <field code="created_at" label="Requested at" type="date"
+               description="When the return request was created.">
+            <mysql expression="rma.created_at" joins="rma"/>
+        </field>
+        <field code="store_id" label="Store" type="id">
+            <mysql expression="rma.store_id" joins="rma"/>
+        </field>
+        <field code="base_currency_code" label="Base currency" type="string">
+            <mysql expression="order.base_currency_code" joins="order"/>
+        </field>
+
+        <field code="item_id" label="Return item ID" type="id">
+            <mysql expression="main.entity_id"/>
+        </field>
+        <field code="rma_id" label="Return request ID" type="id">
+            <mysql expression="main.rma_id"/>
+        </field>
+        <field code="order_id" label="Order ID" type="id">
+            <mysql expression="rma.order_id" joins="rma"/>
+        </field>
+        <field code="product_id" label="Product ID" type="id">
+            <mysql expression="order_item.product_id" joins="order_item"/>
+        </field>
+        <field code="sku" label="SKU" type="string" description="Simple SKU of the ordered item.">
+            <mysql expression="order_item.sku" joins="order_item"/>
+        </field>
+        <field code="parent_sku" label="Parent SKU" type="string"
+               description="SKU of the configurable parent, when the ordered item is a configurable child.">
+            <mysql expression="parent_product.sku" joins="parent_product"/>
+        </field>
+        <field code="status_id" label="Status" type="id">
+            <mysql expression="rma.status_id" joins="rma"/>
+        </field>
+        <field code="reason_id" label="Reason" type="id">
+            <mysql expression="rma.reason_id" joins="rma"/>
+        </field>
+        <field code="condition_id" label="Item condition" type="id">
+            <mysql expression="main.condition_id"/>
+        </field>
+        <field code="qty_requested_qty" label="Units requested" type="decimal"
+               description="Quantity of the item requested for return.">
+            <mysql expression="COALESCE(main.qty_requested, 0)"/>
+        </field>
+        <field code="requested_value_amount" label="Requested value amount" type="money"
+               description="Requested quantity multiplied by the unit value of the ordered item: row total net of discount, excluding tax, divided by the quantity ordered.">
+            <mysql expressionProvider="rma_item_requested_value" joins="order_item"/>
+        </field>
+        <field code="request_type" label="Request type" type="string"
+               description="Return after shipment when the item had been shipped before the request was created, otherwise withdrawal before shipment; delivery is not tracked.">
+            <mysql expressionProvider="rma_item_request_type" joins="rma"/>
+        </field>
+        <field code="is_withdrawal" label="Is withdrawal before shipment" type="boolean"
+               description="Whether the item had not been shipped when the request was created.">
+            <mysql expressionProvider="rma_item_is_withdrawal" joins="rma"/>
+        </field>
+        <field code="is_return_after_shipment" label="Is return after shipment" type="boolean"
+               description="Whether the item had been shipped when the request was created.">
+            <mysql expressionProvider="rma_item_is_return_after_shipment" joins="rma"/>
+        </field>
+
+        <metric code="units_requested" label="Units requested" format="number" aggregate="sum"
+                field="qty_requested_qty"
+                description="Total quantity requested for return. Limitation: this is the requested quantity, not the quantity approved or actually received."/>
+        <metric code="requested_value" label="Requested value" format="money" aggregate="sum"
+                field="requested_value_amount"
+                description="Value of the quantity requested for return, net of discount, excluding tax. Limitation: this is not the refunded amount."/>
+        <metric code="requests" label="Return requests" format="integer" aggregate="count_distinct" field="rma_id"
+                description="Number of distinct return requests containing the items."/>
+        <metric code="withdrawn_units" label="Units withdrawn before shipment" format="number" aggregate="sum"
+                field="qty_requested_qty" condition="is_withdrawal"
+                description="Quantity requested for items not yet shipped when the request was created. Limitation: decided on the shipments created before the request, not on delivery."/>
+        <metric code="returned_units_after_shipment" label="Units returned after shipment" format="number"
+                aggregate="sum" field="qty_requested_qty" condition="is_return_after_shipment"
+                description="Quantity requested for items already shipped when the request was created. Limitation: decided on the shipments created before the request, not on delivery."/>
+        <metric code="units_per_request" label="Units per request" format="number"
+                formula="units_requested / requests"
+                description="Units requested divided by the number of return requests."/>
+
+        <dimension code="request_date" label="Request date" field="created_at"
+                   granularities="hour,day,week,month,year"/>
+        <dimension code="sku" label="SKU" field="sku"/>
+        <dimension code="parent_sku" label="Parent SKU" field="parent_sku"/>
+        <dimension code="product_id" label="Product" field="product_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\ProductNameLabelResolver"/>
+        <dimension code="status_id" label="Status" field="status_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Rma\Label\RmaStatusLabelResolver"/>
+        <dimension code="reason_id" label="Reason" field="reason_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Rma\Label\RmaReasonLabelResolver"/>
+        <dimension code="condition_id" label="Item condition" field="condition_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Rma\Label\RmaItemConditionLabelResolver"/>
+        <dimension code="request_type" label="Request type" field="request_type"
+                   labelResolver="MageOS\AdvancedReport\Model\Rma\Label\RmaRequestTypeLabelResolver"/>
+        <dimension code="store_id" label="Store" field="store_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\StoreLabelResolver"/>
+    </dataset>
+
+    <dataset code="order_returns" label="Orders and return requests" acl="MageOS_AdvancedReport::returns" area="returns">
+        <source name="mysql" table="sales_order" alias="main"/>
+        <implicitFilter code="counted_status"/>
+
+        <join code="payment" table="sales_order_payment" alias="payment" type="left"
+              condition="payment.parent_id = main.entity_id"/>
+        <join code="shipping_address" table="sales_order_address" alias="shipping_address" type="left"
+              condition="shipping_address.parent_id = main.entity_id AND shipping_address.address_type = 'shipping'"/>
+        <join code="store" table="store" alias="store" type="left"
+              condition="store.store_id = main.store_id"/>
+
+        <!-- Reserved fields (drive date filtering/bucketing, store scope and counted statuses). -->
+        <field code="created_at" label="Created at" type="date">
+            <mysql expression="main.created_at"/>
+        </field>
+        <field code="store_id" label="Store" type="id">
+            <mysql expression="main.store_id"/>
+        </field>
+        <field code="status" label="Status" type="string">
+            <mysql expression="main.status"/>
+        </field>
+        <field code="base_currency_code" label="Base currency" type="string">
+            <mysql expression="main.base_currency_code"/>
+        </field>
+
+        <field code="order_id" label="Order ID" type="id">
+            <mysql expression="main.entity_id"/>
+        </field>
+        <field code="customer_group_id" label="Customer group" type="id">
+            <mysql expression="main.customer_group_id"/>
+        </field>
+        <field code="website_id" label="Website" type="id">
+            <mysql expression="store.website_id" joins="store"/>
+        </field>
+        <field code="shipping_country" label="Shipping country" type="string">
+            <mysql expression="shipping_address.country_id" joins="shipping_address"/>
+        </field>
+        <field code="shipping_method" label="Shipping method" type="string">
+            <mysql expression="main.shipping_method"/>
+        </field>
+        <field code="payment_method" label="Payment method" type="string">
+            <mysql expression="payment.method" joins="payment"/>
+        </field>
+        <field code="has_return_request" label="Has return request" type="boolean"
+               description="Whether the order has at least one return request, whenever it was created.">
+            <mysql expressionProvider="rma_order_has_request"/>
+        </field>
+        <field code="return_request_count" label="Return request count" type="integer"
+               description="Number of return requests of the order, whenever they were created.">
+            <mysql expressionProvider="rma_order_request_count"/>
+        </field>
+        <field code="has_withdrawal" label="Has withdrawal before shipment" type="boolean"
+               description="Whether the order has at least one requested item that had not been shipped when its request was created.">
+            <mysql expressionProvider="rma_order_has_withdrawal"/>
+        </field>
+        <field code="has_return_after_shipment" label="Has return after shipment" type="boolean"
+               description="Whether the order has at least one requested item that had been shipped when its request was created.">
+            <mysql expressionProvider="rma_order_has_return_after_shipment"/>
+        </field>
+
+        <metric code="orders" label="Orders" format="integer" aggregate="count" field="order_id"
+                description="Number of orders placed."/>
+        <metric code="orders_with_requests" label="Orders with return requests" format="integer" aggregate="sum"
+                field="has_return_request"
+                description="Orders placed in the period with at least one return request, whenever the request was created; an order with several requests counts once."/>
+        <metric code="return_requests" label="Return requests" format="integer" aggregate="sum"
+                field="return_request_count"
+                description="Return requests of the orders placed in the period, whenever they were created."/>
+        <metric code="order_return_rate" label="Order return rate" format="percent"
+                formula="orders_with_requests / orders" lowerIsBetter="true"
+                description="Orders with return requests as a percentage of orders placed. A lower value is an improvement. Limitation: orders are attributed to the order date and requests are counted whenever they were made, so recent periods can still grow."/>
+        <metric code="requests_per_returned_order" label="Requests per returned order" format="number"
+                formula="return_requests / orders_with_requests"
+                description="Return requests divided by the number of orders with return requests."/>
+        <metric code="orders_with_withdrawals" label="Orders with withdrawals" format="integer" aggregate="sum"
+                field="has_withdrawal"
+                description="Orders placed in the period with at least one item requested before it was shipped, whenever the request was created. Limitation: decided on the shipments created before the request, not on delivery."/>
+        <metric code="orders_with_returns_after_shipment" label="Orders with returns after shipment"
+                format="integer" aggregate="sum" field="has_return_after_shipment"
+                description="Orders placed in the period with at least one item requested after it was shipped, whenever the request was created. Limitation: decided on the shipments created before the request, not on delivery."/>
+        <metric code="withdrawal_rate" label="Withdrawal rate" format="percent"
+                formula="orders_with_withdrawals / orders" lowerIsBetter="true"
+                description="Orders with withdrawals before shipment as a percentage of orders placed. A lower value is an improvement."/>
+        <metric code="return_after_shipment_rate" label="Return after shipment rate" format="percent"
+                formula="orders_with_returns_after_shipment / orders" lowerIsBetter="true"
+                description="Orders with returns after shipment as a percentage of orders placed. A lower value is an improvement."/>
+
+        <dimension code="order_date" label="Order date" field="created_at" granularities="hour,day,week,month,year"/>
+        <dimension code="store_id" label="Store" field="store_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\StoreLabelResolver"/>
+        <dimension code="website_id" label="Website" field="website_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\WebsiteLabelResolver"/>
+        <dimension code="customer_group_id" label="Customer group" field="customer_group_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\CustomerGroupLabelResolver"/>
+        <dimension code="shipping_country" label="Shipping country" field="shipping_country"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\CountryLabelResolver"/>
+        <dimension code="shipping_method" label="Shipping method" field="shipping_method"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\ShippingMethodLabelResolver"/>
+        <dimension code="payment_method" label="Payment method" field="payment_method"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\PaymentMethodLabelResolver"/>
+    </dataset>
+
+    <dataset code="order_item_returns" label="Ordered and returned units" acl="MageOS_AdvancedReport::returns" area="returns">
+        <source name="mysql" table="sales_order_item" alias="main"/>
+        <implicitFilter code="top_level_item"/>
+        <implicitFilter code="counted_status"/>
+
+        <join code="order" table="sales_order" alias="order" type="inner"
+              condition="order.entity_id = main.order_id"/>
+        <join code="parent_product" table="catalog_product_entity" alias="parent_product" type="left"
+              condition="parent_product.entity_id = main.product_id"/>
+        <join code="category" table="catalog_category_product" alias="category" type="left"
+              condition="category.product_id = main.product_id" cardinality="many"/>
+
+        <!-- Reserved fields, mapped to the order row so the indexed sales_order columns drive the query. -->
+        <field code="created_at" label="Created at" type="date">
+            <mysql expression="order.created_at" joins="order"/>
+        </field>
+        <field code="store_id" label="Store" type="id">
+            <mysql expression="order.store_id" joins="order"/>
+        </field>
+        <field code="status" label="Status" type="string">
+            <mysql expression="order.status" joins="order"/>
+        </field>
+        <field code="base_currency_code" label="Base currency" type="string">
+            <mysql expression="order.base_currency_code" joins="order"/>
+        </field>
+
+        <field code="item_id" label="Item ID" type="id">
+            <mysql expression="main.item_id"/>
+        </field>
+        <field code="order_id" label="Order ID" type="id">
+            <mysql expression="main.order_id"/>
+        </field>
+        <field code="product_id" label="Product ID" type="id">
+            <mysql expression="main.product_id"/>
+        </field>
+        <field code="sku" label="SKU" type="string" description="Simple SKU of the ordered item.">
+            <mysql expression="main.sku"/>
+        </field>
+        <field code="parent_sku" label="Parent SKU" type="string"
+               description="SKU of the configurable parent, when the ordered item is a configurable child.">
+            <mysql expression="parent_product.sku" joins="parent_product"/>
+        </field>
+        <field code="category_id" label="Category ID" type="id">
+            <mysql expression="category.category_id" joins="category"/>
+        </field>
+        <field code="customer_group_id" label="Customer group" type="id">
+            <mysql expression="order.customer_group_id" joins="order"/>
+        </field>
+        <field code="qty_net" label="Units ordered, net" type="decimal"
+               description="Quantity ordered net of cancellations.">
+            <mysql expressionProvider="bundle_qty_net"/>
+        </field>
+        <field code="qty_requested_rma" label="Units requested for return" type="decimal"
+               description="Quantity of the ordered item requested for return, across all its return requests, whenever they were created.">
+            <mysql expressionProvider="rma_order_item_units_requested"/>
+        </field>
+
+        <metric code="units_ordered" label="Units ordered" format="number" aggregate="sum" field="qty_net"
+                description="Quantity ordered, net of cancellations."/>
+        <metric code="units_requested" label="Units requested" format="number" aggregate="sum"
+                field="qty_requested_rma"
+                description="Quantity requested for return of the units ordered in the period, whenever the request was created. Limitation: this is the requested quantity, not the quantity approved or actually received."/>
+        <metric code="unit_return_rate" label="Unit return rate" format="percent"
+                formula="units_requested / units_ordered" lowerIsBetter="true"
+                description="Units requested for return as a percentage of units ordered. A lower value is an improvement. Limitation: units are attributed to the order date and requests are counted whenever they were made, so recent periods can still grow."/>
+        <metric code="orders" label="Orders" format="integer" aggregate="count_distinct" field="order_id"
+                description="Number of distinct orders contributing item rows."/>
+
+        <dimension code="order_date" label="Order date" field="created_at" granularities="hour,day,week,month,year"/>
+        <dimension code="store_id" label="Store" field="store_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\StoreLabelResolver"/>
+        <dimension code="customer_group_id" label="Customer group" field="customer_group_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\CustomerGroupLabelResolver"/>
+        <dimension code="sku" label="SKU" field="sku"/>
+        <dimension code="parent_sku" label="Parent SKU" field="parent_sku"/>
+        <dimension code="product_id" label="Product" field="product_id"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\ProductNameLabelResolver"/>
+        <dimension code="category_id" label="Category" field="category_id" nonAdditive="true"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\CategoryLabelResolver"/>
+    </dataset>
+
+    <!-- Return presets (area returns). -->
+    <preset code="returns_overview" area="returns" dataset="rma_requests" label="Returns overview" description="Return requests, requested units, withdrawals, returns after shipment and open requests per day, compared with the previous period." dateRange="last_30_days" compareTo="previous_period" sources="mysql">
+        <metric code="requests"/>
+        <metric code="orders_with_requests"/>
+        <metric code="units_requested"/>
+        <metric code="withdrawals"/>
+        <metric code="returns_after_shipment"/>
+        <metric code="open_requests"/>
+        <metric code="rejected_requests"/>
+        <metric code="avg_days_to_request"/>
+        <dimension code="request_date" granularity="day"/>
+        <chart type="line">
+            <metric code="requests"/>
+        </chart>
+    </preset>
+
+    <preset code="withdrawals_vs_returns" area="returns" dataset="rma_requests" label="Withdrawals and returns" description="Return requests split into withdrawals before shipment, returns after shipment and mixed requests." dateRange="last_30_days" sources="mysql">
+        <metric code="requests"/>
+        <metric code="units_requested"/>
+        <metric code="avg_days_to_request"/>
+        <metric code="avg_days_from_shipment"/>
+        <dimension code="request_type"/>
+        <sort by="requests" direction="desc"/>
+        <chart type="doughnut">
+            <metric code="requests"/>
+        </chart>
+    </preset>
+
+    <preset code="withdrawals_trend" area="returns" dataset="rma_requests" label="Withdrawals and returns trend" description="Withdrawals before shipment, returns after shipment and mixed requests per day." dateRange="last_30_days" sources="mysql">
+        <metric code="withdrawals"/>
+        <metric code="returns_after_shipment"/>
+        <metric code="mixed_requests"/>
+        <metric code="withdrawal_share"/>
+        <dimension code="request_date" granularity="day"/>
+        <chart type="bar" sortBy="request_date" sortDirection="asc">
+            <metric code="withdrawals"/>
+            <metric code="returns_after_shipment"/>
+            <dimension code="request_date" granularity="day"/>
+        </chart>
+    </preset>
+
+    <preset code="returns_by_reason" area="returns" dataset="rma_requests" label="Returns by reason" description="Return requests and requested units for each return reason." dateRange="last_30_days" sources="mysql">
+        <metric code="requests"/>
+        <metric code="units_requested"/>
+        <metric code="withdrawals"/>
+        <metric code="returns_after_shipment"/>
+        <dimension code="reason_id"/>
+        <sort by="requests" direction="desc"/>
+        <chart type="horizontalBar">
+            <metric code="requests"/>
+        </chart>
+    </preset>
+
+    <preset code="returns_by_status" area="returns" dataset="rma_requests" label="Returns by status" description="Return requests and requested units for each return status." dateRange="last_30_days" sources="mysql">
+        <metric code="requests"/>
+        <metric code="units_requested"/>
+        <dimension code="status_id"/>
+        <sort by="requests" direction="desc"/>
+        <chart type="horizontalBar">
+            <metric code="requests"/>
+        </chart>
+    </preset>
+
+    <preset code="returns_by_resolution" area="returns" dataset="rma_requests" label="Returns by resolution" description="Return requests and requested units for each requested resolution." dateRange="last_30_days" sources="mysql">
+        <metric code="requests"/>
+        <metric code="units_requested"/>
+        <dimension code="resolution_type_id"/>
+        <sort by="requests" direction="desc"/>
+        <chart type="doughnut">
+            <metric code="requests"/>
+        </chart>
+    </preset>
+
+    <preset code="open_return_requests" area="returns" dataset="rma_requests" label="Open return requests" description="Return requests still to be handled, with their status and request date, most units first." dateRange="last_30_days" sources="mysql">
+        <metric code="units_requested"/>
+        <dimension code="increment_id"/>
+        <dimension code="status_id"/>
+        <dimension code="request_date" granularity="day"/>
+        <filter field="is_open" operator="eq" value="1"/>
+        <sort by="units_requested" direction="desc"/>
+        <chart type="bar" sortBy="request_date" sortDirection="asc">
+            <metric code="requests"/>
+            <dimension code="request_date" granularity="day"/>
+        </chart>
+    </preset>
+
+    <preset code="top_returned_products" area="returns" dataset="rma_items" label="Top returned products" description="Products with the most units requested for return, with their value and number of requests." dateRange="last_30_days" sources="mysql" alternateDimension="sku">
+        <metric code="units_requested"/>
+        <metric code="requested_value"/>
+        <metric code="requests"/>
+        <dimension code="parent_sku"/>
+        <sort by="units_requested" direction="desc"/>
+        <chart type="horizontalBar">
+            <metric code="units_requested"/>
+        </chart>
+    </preset>
+
+    <preset code="returns_by_condition" area="returns" dataset="rma_items" label="Returns by item condition" description="Units requested for return and return requests for each declared item condition." dateRange="last_30_days" sources="mysql">
+        <metric code="units_requested"/>
+        <metric code="requests"/>
+        <dimension code="condition_id"/>
+        <sort by="units_requested" direction="desc"/>
+        <chart type="doughnut">
+            <metric code="units_requested"/>
+        </chart>
+    </preset>
+
+    <preset code="product_return_rate" area="returns" dataset="order_item_returns" label="Product return rate" description="Units ordered, units requested for return and unit return rate for each product." dateRange="last_30_days" sources="mysql" alternateDimension="sku">
+        <metric code="units_ordered"/>
+        <metric code="units_requested"/>
+        <metric code="unit_return_rate"/>
+        <dimension code="parent_sku"/>
+        <sort by="units_requested" direction="desc"/>
+        <chart type="horizontalBar" sortBy="units_requested" sortDirection="desc">
+            <metric code="units_requested"/>
+            <metric code="unit_return_rate"/>
+        </chart>
+    </preset>
+
+    <preset code="unit_return_rate_trend" area="returns" dataset="order_item_returns" label="Returned vs ordered units" description="Units ordered and units requested for return per month, compared with the previous year." dateRange="year_to_date" compareTo="previous_year" sources="mysql">
+        <metric code="units_ordered"/>
+        <metric code="units_requested"/>
+        <metric code="unit_return_rate"/>
+        <dimension code="order_date" granularity="month"/>
+        <chart type="line">
+            <metric code="units_ordered"/>
+            <metric code="units_requested"/>
+            <metric code="unit_return_rate"/>
+        </chart>
+    </preset>
+
+    <preset code="order_return_rate" area="returns" dataset="order_returns" label="Orders with return requests" description="Orders, orders with return requests and order return rate per month, compared with the previous year." dateRange="year_to_date" compareTo="previous_year" sources="mysql">
+        <metric code="orders"/>
+        <metric code="orders_with_requests"/>
+        <metric code="return_requests"/>
+        <metric code="order_return_rate"/>
+        <metric code="requests_per_returned_order"/>
+        <metric code="orders_with_withdrawals"/>
+        <metric code="orders_with_returns_after_shipment"/>
+        <dimension code="order_date" granularity="month"/>
+        <chart type="line">
+            <metric code="orders"/>
+            <metric code="orders_with_requests"/>
+            <metric code="order_return_rate"/>
+        </chart>
+    </preset>
+
+    <preset code="returns_by_shipping_country" area="returns" dataset="order_returns" label="Return rate by shipping country" description="Orders, orders with return requests and order return rate for each shipping destination country." dateRange="year_to_date" sources="mysql">
+        <metric code="orders"/>
+        <metric code="orders_with_requests"/>
+        <metric code="order_return_rate"/>
+        <dimension code="shipping_country"/>
+        <sort by="orders_with_requests" direction="desc"/>
+        <chart type="horizontalBar" sortBy="orders_with_requests" sortDirection="desc">
+            <metric code="orders_with_requests"/>
+            <metric code="order_return_rate"/>
+        </chart>
+    </preset>
+</config>

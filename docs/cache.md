@@ -51,6 +51,10 @@ abandoned and recent thresholds move with the clock, so even a closed range chan
 in `etc/di.xml`). The two cart settings (`carts/abandoned_after_hours`, `carts/recent_cart_hours`, the latter capped at 120)
 are part of the result-config key, so changing them gives new entries.
 
+The return datasets (`rma_requests`, `rma_items`, `order_returns`, `order_item_returns`, present only while `MageOS_RMA` is
+enabled) always use the **open-period** TTL too (`timeRelativeDatasets`): status changes and requests created later change
+the results of past periods (the order based return datasets count requests whenever they were made).
+
 ## Invalidation
 
 - Saving the `mageos_advancedreport` configuration section cleans the whole cache type (`CleanReportCacheObserver`). The
@@ -111,6 +115,7 @@ hit returns the same warning (`FailureCachingTest::testItKeepsTheTruncationWarni
 | Sales and orders, closed period | up to the closed TTL (24 h) | refunds and shipments change past periods: returns, net sales and units to ship are attributed to the order date (R04, R05), so a closed period can change after it was cached |
 | Stock (physical, salable, dead stock, never sold, low stock coverage) | up to the closed TTL (24 h) | the underlying data is live; only the cache delays it. Stock presets with an order based part (30-day sales) are bounded by the same TTL |
 | Carts (abandoned, recent, converted) | up to the open TTL (5 min) | always the open-period TTL; a cart can become abandoned or converted after it was cached |
+| Returns (requests, returned items, orders and units with return requests; only with `MageOS_RMA`) | up to the open TTL (5 min) | always the open-period TTL; a request can change status, and new requests change past periods (order based return datasets count requests whenever they were made) |
 | Customers (`days_since_last_order`) | up to 24 h | relative to today, so a cached closed period can be a day stale (R18) |
 
 Proof by integration test: `SalesInvalidationTest` (cancellation, refund and shipment keep the cached values until bypass; open

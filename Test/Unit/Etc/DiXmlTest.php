@@ -8,6 +8,7 @@ use DOMDocument;
 use DOMElement;
 use DOMNode;
 use DOMXPath;
+use MageOS\AdvancedReport\Model\Rma\Config\RmaDefinitionSource;
 use MageOS\AdvancedReport\Test\Unit\Helper\XPathTestTrait;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -21,6 +22,8 @@ final class DiXmlTest extends TestCase
 
     private const string DI_XML_PATH = __DIR__ . '/../../../etc/di.xml';
     private const string EXPRESSION_NAMESPACE = 'MageOS\\AdvancedReport\\Model\\DataSource\\Mysql\\FieldExpression\\';
+    protected const string RMA_EXPRESSION_NAMESPACE = 'MageOS\\AdvancedReport\\Model\\Rma\\FieldExpression\\';
+    protected const array RMA_DATASETS = ['rma_requests', 'rma_items', 'order_returns', 'order_item_returns'];
 
     public function testItRegistersShipmentCountAndCreditMemoCountProvidersOnTheFieldExpressionResolver(): void
     {
@@ -131,6 +134,107 @@ final class DiXmlTest extends TestCase
             self::assertContains('Magento_Reports::abandoned', $values, $code);
             self::assertContains('Magento_Sales::sales_order', $values, $code);
         }
+    }
+
+    public function testItRegistersEveryRmaExpressionProviderOnTheFieldExpressionResolver(): void
+    {
+        $xpath = $this->xpath();
+        $base = '/config/type[@name="MageOS\\AdvancedReport\\Model\\DataSource\\Mysql\\FieldExpressionResolver"]'
+            . '/arguments/argument[@name="providers"]/item';
+
+        foreach ([
+            'rma_request_type' => 'RequestTypeExpression',
+            'rma_is_withdrawal' => 'IsWithdrawalExpression',
+            'rma_is_return_after_shipment' => 'IsReturnAfterShipmentExpression',
+            'rma_is_mixed_request' => 'IsMixedRequestExpression',
+            'rma_request_units' => 'RequestUnitsExpression',
+            'rma_days_from_shipment' => 'DaysFromShipmentExpression',
+            'rma_item_request_type' => 'ItemRequestTypeExpression',
+            'rma_item_is_withdrawal' => 'ItemIsWithdrawalExpression',
+            'rma_item_is_return_after_shipment' => 'ItemIsReturnAfterShipmentExpression',
+            'rma_item_requested_value' => 'ItemRequestedValueExpression',
+            'rma_order_has_request' => 'OrderHasRequestExpression',
+            'rma_order_request_count' => 'OrderRequestCountExpression',
+            'rma_order_has_withdrawal' => 'OrderHasWithdrawalExpression',
+            'rma_order_has_return_after_shipment' => 'OrderHasReturnAfterShipmentExpression',
+            'rma_order_item_units_requested' => 'OrderItemUnitsRequestedExpression',
+        ] as $code => $name) {
+            $item = $this->element($xpath, $base . '[@name="' . $code . '"]');
+            self::assertSame('object', $item->getAttribute('xsi:type'), $code);
+            self::assertSame(self::RMA_EXPRESSION_NAMESPACE . $name, trim($item->textContent), $code);
+        }
+    }
+
+    public function testItDeclaresTheRmaFlagVirtualTypesWithTheirTypeAndArgument(): void
+    {
+        $xpath = $this->xpath();
+
+        foreach ([
+            'IsWithdrawalExpression' => ['RequestTypeFlagExpression', 'type', 'string', 'withdrawal'],
+            'IsReturnAfterShipmentExpression' => ['RequestTypeFlagExpression', 'type', 'string', 'return'],
+            'IsMixedRequestExpression' => ['RequestTypeFlagExpression', 'type', 'string', 'mixed'],
+            'ItemIsWithdrawalExpression' => ['ItemShippedFlagExpression', 'shipped', 'boolean', 'false'],
+            'ItemIsReturnAfterShipmentExpression' => ['ItemShippedFlagExpression', 'shipped', 'boolean', 'true'],
+            'OrderHasWithdrawalExpression' => ['OrderRequestStageExpression', 'shipped', 'boolean', 'false'],
+            'OrderHasReturnAfterShipmentExpression' => ['OrderRequestStageExpression', 'shipped', 'boolean', 'true'],
+        ] as $name => [$type, $argumentName, $argumentType, $value]) {
+            $node = $this->element(
+                $xpath,
+                '/config/virtualType[@name="' . self::RMA_EXPRESSION_NAMESPACE . $name . '"]'
+            );
+            self::assertSame(self::RMA_EXPRESSION_NAMESPACE . $type, $node->getAttribute('type'), $name);
+            $parameters = array_map(
+                static fn (ReflectionParameter $parameter): string => $parameter->getName(),
+                (new ReflectionClass(self::RMA_EXPRESSION_NAMESPACE . $type))->getConstructor()?->getParameters() ?? []
+            );
+            self::assertContains($argumentName, $parameters, $name);
+            self::assertSame(1, self::queryNodes($xpath, 'arguments/argument', $node)->length, $name);
+            $argument = $this->element($xpath, 'arguments/argument[@name="' . $argumentName . '"]', $node);
+            self::assertSame($argumentType, $argument->getAttribute('xsi:type'), $name);
+            self::assertSame($value, trim($argument->textContent), $name);
+        }
+    }
+
+    public function testItRequiresRmaManageAndSalesOrderForTheRmaDatasets(): void
+    {
+        $xpath = $this->xpath();
+        $coreResources = '/config/type[@name="MageOS\\AdvancedReport\\Model\\Security\\DatasetAccess"]'
+            . '/arguments/argument[@name="coreResources"]';
+
+        foreach (self::RMA_DATASETS as $code) {
+            $values = [];
+            foreach (self::queryNodes($xpath, $coreResources . '/item[@name="' . $code . '"]/item') as $node) {
+                self::assertInstanceOf(DOMElement::class, $node);
+                $values[] = trim($node->textContent);
+            }
+            self::assertContains('MageOS_RMA::rma_manage', $values, $code);
+            self::assertContains('Magento_Sales::sales_order', $values, $code);
+        }
+    }
+
+    public function testItListsTheRmaDatasetsAsTimeRelativeOnTheReportRunner(): void
+    {
+        $xpath = $this->xpath();
+        $base = '/config/type[@name="MageOS\\AdvancedReport\\Model\\Query\\ReportRunner"]'
+            . '/arguments/argument[@name="timeRelativeDatasets"]/item';
+
+        foreach (self::RMA_DATASETS as $code) {
+            $item = $this->element($xpath, $base . '[@name="' . $code . '"]');
+            self::assertSame('string', $item->getAttribute('xsi:type'), $code);
+            self::assertSame($code, trim($item->textContent));
+        }
+    }
+
+    public function testItRegistersTheRmaDefinitionSourceOnTheDefinitionRegistry(): void
+    {
+        $item = $this->element(
+            $this->xpath(),
+            '/config/type[@name="MageOS\\AdvancedReport\\Model\\Definition\\DefinitionRegistry"]'
+            . '/arguments/argument[@name="definitionSources"]/item[@name="rma"]'
+        );
+
+        self::assertSame('object', $item->getAttribute('xsi:type'));
+        self::assertSame(RmaDefinitionSource::class, trim($item->textContent));
     }
 
     private function xpath(): DOMXPath

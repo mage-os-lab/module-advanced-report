@@ -7,10 +7,16 @@ use MageOS\AdvancedReport\Test\Tooling\XsdValidator;
 require __DIR__ . '/../vendor/autoload.php';
 
 $etc = dirname(__DIR__) . '/etc';
-$errors = (new XsdValidator())->validateFile($etc . '/report_datasets.xml', $etc . '/report_datasets_file.xsd');
+$validator = new XsdValidator();
+$failed = false;
 
-foreach ($errors as $error) {
-    fwrite(STDERR, 'report_datasets.xml ' . $error . PHP_EOL);
+foreach (['report_datasets.xml', 'report_datasets_rma.xml'] as $file) {
+    $errors = $validator->validateFile($etc . '/' . $file, $etc . '/report_datasets_file.xsd');
+
+    foreach ($errors as $error) {
+        fwrite(STDERR, $file . ' ' . $error . PHP_EOL);
+    }
+    $failed = $failed || $errors !== [];
 }
 
-exit($errors === [] ? 0 : 1);
+exit($failed ? 1 : 0);

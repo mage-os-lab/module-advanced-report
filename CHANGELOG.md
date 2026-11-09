@@ -4,6 +4,11 @@
 
 ### Added
 - **Marketing area**: new `marketing` dataset area and ACL resource `MageOS_AdvancedReport::marketing`, used by add-on modules such as `MageOS_GoogleAdvancedReport` (Google Analytics 4 import)
+- **Returns area** (only while `MageOS_RMA` is enabled): datasets `rma_requests`, `rma_items`, `order_returns`, `order_item_returns` declared in `etc/report_datasets_rma.xml`, read by `RmaDefinitionSource`; ACL resource `MageOS_AdvancedReport::returns` plus the core resources `MageOS_RMA::rma_manage` and `Magento_Sales::sales_order`; the `returns` resource is removed from the ACL tree while `MageOS_RMA` is disabled
+- **13 return reports**: returns overview, withdrawals and returns, withdrawals and returns trend, returns by reason, status, resolution and item condition, open return requests, top returned products, product return rate, returned vs ordered units, orders with return requests, return rate by shipping country
+- **Request type**: withdrawal before shipment, return after shipment or mixed, decided on the shipments created before the request (delivery is not tracked), with its label resolver; label resolvers for RMA status, reason, resolution and item condition
+- **Definition sources**: `DefinitionSourceInterface` and the `DefinitionRegistry` argument `definitionSources`, to merge datasets and presets loaded only under a condition
+- The return datasets always use the open-period cache TTL
 
 ## [1.0.0] - 2026-11-04
 

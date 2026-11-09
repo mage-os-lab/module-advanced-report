@@ -16,7 +16,8 @@ Test references use the form `Folder/ClassTest::method` and are relative to `Tes
 - **Currency**: every amount is in the **base currency of the order's store** (`base_*` columns). No conversion is
   applied; monetary reports over several base currencies are rejected. See
   [time and currency](time-and-currency.md#currency).
-- **Counted statuses**: the order datasets (`sales_orders`, `customer_orders`, `sales_items`) apply the implicit
+- **Counted statuses**: the order datasets (`sales_orders`, `customer_orders`, `sales_items`, and with MageOS_RMA
+  `order_returns` and `order_item_returns`) apply the implicit
   `counted_status` filter. Config `mageos_advancedreport/sales/counted_statuses` is a comma-separated list of order
   status codes; empty (default) means every status except `canceled`. Pinned per test method with `#[Config]`.
   Counting `canceled` is possible: the order still counts in `orders`, but its monetary and unit components are
@@ -24,8 +25,9 @@ Test references use the form `Folder/ClassTest::method` and are relative to `Tes
 - **Date attribution**: the report date is the order `created_at`, converted to the store timezone before bucketing
   (rules in [time and currency](time-and-currency.md#timezone)). Refunds, shipments and credit memos are attributed to the **order date**, not their own
   date (R04, R05): a past period changes when an order is later refunded or shipped.
-- **Grain**: one row per order (`sales_orders`, `customer_orders`), per top-level order item (`sales_items`), per
-  customer account (`customers`), per source item (`catalog_stock`), per SKU and stock (`catalog_salable`).
+- **Grain**: one row per order (`sales_orders`, `customer_orders`, `order_returns`), per top-level order item
+  (`sales_items`, `order_item_returns`), per customer account (`customers`), per source item (`catalog_stock`), per SKU
+  and stock (`catalog_salable`), per return request (`rma_requests`), per return request item (`rma_items`).
 - **Additivity**: `SUM` and `COUNT` metrics are additive across rows. `COUNT DISTINCT` metrics (`unique_customers`,
   `sales_items.orders`) are not: the total is not the sum of the rows. Derived metrics are always recomputed from the
   aggregated components (ratio of sums, never the average of row ratios), on rows, totals and comparisons alike.
@@ -218,6 +220,124 @@ dated by the last activity of their cart. `category_id` is a fan-out dimension: 
 
 Carts are verified by the unit tests of the cart providers and the integration tests under `Test/Integration/`; the raw
 expressions are in the [metric inventory](metric-inventory.md).
+
+## Returns (MageOS_RMA): `rma_requests`, `rma_items`, `order_returns`, `order_item_returns`
+
+Area `returns`; ACL `MageOS_AdvancedReport::returns` (plus the core ACLs, see
+[security](security.md#dataset-access)). The four datasets exist **only while the module `MageOS_RMA` is enabled**: they
+are defined in `etc/report_datasets_rma.xml`, read by `Model\Rma\Config\RmaDefinitionSource` only when `MageOS_RMA` is
+enabled. With the module disabled or absent they are not in the registry, and neither are their presets. The reports read
+the RMA tables (`rma_entity`, `rma_item` and the lookups `rma_status`, `rma_reason`, `rma_resolution_type`,
+`rma_item_condition`) directly; no `MageOS\RMA` class is used.
+
+| Dataset | Grain | Date | Implicit filters |
+|---|---|---|---|
+| `rma_requests` | one row per return request (`rma_entity`) | request `created_at` | none |
+| `rma_items` | one row per request item (`rma_item`) | `created_at` of the request the item belongs to | none |
+| `order_returns` | one row per order (`sales_order`) | order `created_at` | `counted_status` |
+| `order_item_returns` | one row per top-level order item (`sales_order_item`) | order `created_at` | `top_level_item`, `counted_status` |
+
+Dates are converted to the store timezone before bucketing, as for every dataset. `rma_requests` and `rma_items` are
+scoped by the store of the request, `order_returns` and `order_item_returns` by the store of the order. Amounts are in
+the base currency of the order's store.
+
+Definitions shared by the four datasets:
+
+| Term | Definition |
+|---|---|
+| Request type | Decided by comparing the items of the request with the shipments of the order. **Withdrawal before shipment** (`withdrawal`): no requested item had been shipped when the request was created. **Return after shipment** (`return`): every requested item had been shipped. **Mixed** (`mixed`, partly shipped): some requested items had been shipped, others had not. |
+| Shipped | An item counts as shipped when a shipment containing it was created at or before the request (`sales_shipment.created_at <= rma_entity.created_at`); for a bundle shipped separately, a shipment containing one of its children. Only shipments created before the request count. |
+| Delivery | **Not tracked** (Magento stores no delivery date): a request made after shipment but before delivery is a return after shipment (R50). |
+| Request without items | Has no type: counted in `requests`, in none of the three type metrics. |
+| Item level type | On `rma_items` and in the `order_returns` type flags the type is decided per item, so it is only withdrawal or return (never mixed). |
+| Quantities | Always the requested quantity (`rma_item.qty_requested`), never the approved (`qty_approved`) or received (`qty_returned`) quantity (R52). |
+| Status | Requests are counted in **any status**, rejected and canceled by customer included. The status metrics (`open_requests`, `rejected_requests`, `resolved_requests`, `canceled_requests`, `rejection_rate`) and the `status_id` dimension use the **current** status of the request, not the status it had at the end of the period. |
+| Open | Current status code not in `rejected`, `canceled_by_customer`, `resolved`. |
+
+Attribution:
+
+- `rma_requests` and `rma_items`: requests are attributed to the date they were made.
+- `order_returns` and `order_item_returns`: orders and units are attributed to the **order date**; the requests on those
+  orders are counted **whenever they were made**, also after the end of the period. A past period changes when a new
+  request is created on one of its orders, and recent periods keep growing as their orders receive requests.
+- Status changes and later requests change past results, so the four datasets always use the open-period cache TTL
+  ([cache](cache.md#ttl)).
+
+### `rma_requests` metrics
+
+| Metric | Formula | Notes |
+|---|---|---|
+| `requests` | `COUNT(rma_id)` | Return requests created in the period, in any status. |
+| `orders_with_requests` | `COUNT DISTINCT(order_id)` | Distinct orders with at least one request created in the period. Not additive across rows. |
+| `customers_with_requests` | `COUNT DISTINCT(customer_email)` | Distinct customers by request email (`LOWER(TRIM(customer_email))`): guest and registered requests of the same email are merged. Not additive across rows. |
+| `requests_per_order` | `requests / orders_with_requests` | Null when there are no requests. |
+| `units_requested` | `SUM(units_requested_qty)` | Sum of `qty_requested` over the items of the request (R52). |
+| `withdrawals` | `SUM(is_withdrawal)` | Requests of type withdrawal before shipment (R50). |
+| `returns_after_shipment` | `SUM(is_return_after_shipment)` | Requests of type return after shipment (R50). |
+| `mixed_requests` | `SUM(is_mixed_request)` | Requests of type mixed (R50). |
+| `withdrawal_share` | `withdrawals / requests` | Null when there are no requests. |
+| `open_requests` | `SUM(is_open)` | Current status is open (above). Lower is better. |
+| `rejected_requests` | `SUM(is_rejected)` | Current status `rejected`. |
+| `resolved_requests` | `SUM(is_resolved)` | Current status `resolved`. |
+| `canceled_requests` | `SUM(is_canceled)` | Current status `canceled_by_customer`. |
+| `rejection_rate` | `rejected_requests / requests` | Lower is better; null when there are no requests. |
+| `avg_days_to_request` | `AVG(days_to_request)` | Days from the order `created_at` to the request `created_at` (never negative). |
+| `avg_days_from_shipment` | `AVG(days_from_shipment)` | Days from the latest shipment of the order created at or before the request to the request; requests with nothing shipped before them (withdrawals) are excluded from the average. |
+
+Dimensions: `request_date` (hour, day, week, month, year), `status_id`, `reason_id`, `resolution_type_id` (labels from
+the RMA lookup tables, translated through `__()`), `request_type`, `store_id`, `website_id`, `customer_group_id` (of the
+order), `customer_type` (guest when the request has no customer account), `shipping_country` (order shipping address),
+`increment_id` (request number), `customer_email`. `customer_email` and `increment_id` are personal data, see
+[security](security.md#data-classification).
+
+### `rma_items` metrics
+
+| Metric | Formula | Notes |
+|---|---|---|
+| `units_requested` | `SUM(qty_requested_qty)` | `COALESCE(qty_requested, 0)` of the item (R52). |
+| `requested_value` | `SUM(requested_value_amount)` | Requested quantity times the unit value of the order item: `(base_row_total - (ABS(base_discount_amount) - base_discount_tax_compensation_amount)) / qty_ordered`. Base currency, excluding tax, net of discount; dynamic price bundles use the discount of their children. It is the value of the request, **not the refunded amount** (refunds are `returns` in `sales_orders` and `sales_items`, R53). |
+| `requests` | `COUNT DISTINCT(rma_id)` | Distinct requests containing the items. Not additive across rows. |
+| `withdrawn_units` | `SUM(qty_requested_qty)` where `is_withdrawal` | Units of items not shipped when the request was created (R50). |
+| `returned_units_after_shipment` | `SUM(qty_requested_qty)` where `is_return_after_shipment` | Units of items shipped when the request was created (R50). |
+| `units_per_request` | `units_requested / requests` | Null when there are no requests. |
+
+Dimensions: `request_date`, `sku` (simple SKU of the order item), `parent_sku` (configurable parent), `product_id`
+(product name), `status_id` and `reason_id` (of the request), `condition_id` (declared item condition), `request_type`
+(per item: withdrawal or return), `store_id` (of the request). There is no category dimension.
+
+### `order_returns` metrics
+
+| Metric | Formula | Notes |
+|---|---|---|
+| `orders` | `COUNT(order_id)` | Orders placed in the period with a counted status. |
+| `orders_with_requests` | `SUM(has_return_request)` | Orders of the period with at least one request, made at any time; an order with several requests counts once. |
+| `return_requests` | `SUM(return_request_count)` | Requests on the orders of the period, made at any time, in any status. |
+| `order_return_rate` | `orders_with_requests / orders` | Lower is better; null when there are no orders. Recent periods can still grow. |
+| `requests_per_returned_order` | `return_requests / orders_with_requests` | Null when no order has requests. |
+| `orders_with_withdrawals` | `SUM(has_withdrawal)` | Orders with at least one requested item not shipped when its request was created (R50). |
+| `orders_with_returns_after_shipment` | `SUM(has_return_after_shipment)` | Orders with at least one requested item shipped when its request was created (R50). |
+| `withdrawal_rate` | `orders_with_withdrawals / orders` | Lower is better. |
+| `return_after_shipment_rate` | `orders_with_returns_after_shipment / orders` | Lower is better. |
+
+An order with a mixed request, or with requests of both types, counts in both `orders_with_withdrawals` and
+`orders_with_returns_after_shipment`. Dimensions: `order_date`, `store_id`, `website_id`, `customer_group_id`,
+`shipping_country`, `shipping_method`, `payment_method`.
+
+### `order_item_returns` metrics
+
+| Metric | Formula | Notes |
+|---|---|---|
+| `units_ordered` | `SUM(qty_net)` | Quantity ordered net of cancellations (provider `bundle_qty_net`, same as `sales_items.units_sold`). |
+| `units_requested` | `SUM(qty_requested_rma)` | `qty_requested` of the order item over all its requests, made at any time, in any status (R52). |
+| `unit_return_rate` | `units_requested / units_ordered` | Lower is better; null when no units were ordered. Recent periods can still grow. |
+| `orders` | `COUNT DISTINCT(order_id)` | Distinct orders contributing item rows. Not additive across rows. |
+
+Dimensions: `order_date`, `store_id`, `customer_group_id`, `sku`, `parent_sku`, `product_id`, `category_id`.
+`category_id` is a fan-out dimension (R01): totals may not equal the sum of the rows.
+
+Returns are verified by the unit tests under `Test/Unit/Model/Rma/` (definition source, request type SQL, providers,
+label resolvers); no integration test asserts their values. The raw expressions are in the
+[metric inventory](metric-inventory.md) while `MageOS_RMA` is enabled.
 
 ## Inventory quantities: physical, reserved and salable
 
