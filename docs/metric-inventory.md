@@ -72,6 +72,7 @@ Fan-out dimensions: category_id
 | `gross_margin` | Gross margin | derived |  | `net_sales - cost` | child | ⚠ by category_id | timezone, currency, counted_statuses |
 | `margin_pct` | Margin % | derived |  | `gross_margin / net_sales` | child | ⚠ by category_id | timezone, currency, counted_statuses |
 | `return_rate` | Return rate | derived |  | `returns / gross_sales` |  | ⚠ by category_id | timezone, currency, counted_statuses |
+| `refund_rate` | Refund rate (units) | derived |  | `units_refunded / units_sold` |  | ⚠ by category_id | timezone, counted_statuses |
 | `shipments` | Shipments | aggregate | sum | `provider:shipment_count` |  | ⚠ by category_id | timezone, counted_statuses |
 | `credit_memos` | Credit memos | aggregate | sum | `provider:credit_memo_count` |  | ⚠ by category_id | timezone, counted_statuses |
 | `orders` | Orders | aggregate | count_distinct | `main.order_id` |  |  | timezone, counted_statuses |
@@ -145,6 +146,20 @@ Fan-out dimensions: category_id
 | `abandoned_carts` | Abandoned carts | aggregate | count_distinct | `main.quote_id` | quote |  | timezone |
 | `converted_units` | Converted units | aggregate | sum | `COALESCE(main.qty, 0)` | quote | ⚠ by category_id | timezone |
 | `item_conversion_rate` | Item conversion rate | derived |  | `converted_units / units_in_carts` | quote | ⚠ by category_id | timezone |
+
+## search_terms (Search terms)
+
+Base table: `search_query`
+
+Fan-out dimensions: none
+
+| Metric | Label | Kind | Aggregate | Expression | Joins | Fan-out | Depends on |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `searches` | Searches | aggregate | sum | `main.popularity` |  |  | timezone |
+| `distinct_terms` | Distinct terms | aggregate | count | `main.query_id` |  |  | timezone |
+| `searches_no_results` | Searches without results | aggregate | sum | `main.popularity` |  |  | timezone |
+| `no_results_rate` | Searches without results (%) | derived |  | `searches_no_results / searches` |  |  | timezone |
+| `avg_results` | Average results per term | aggregate | avg | `main.num_results` |  |  | timezone |
 
 ## rma_requests (Return requests)
 

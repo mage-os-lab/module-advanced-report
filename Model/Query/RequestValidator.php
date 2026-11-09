@@ -66,7 +66,12 @@ class RequestValidator
      */
     public function validate(ReportRequestInterface $request, bool $checkAcl = true): void
     {
-        $dataset = $this->definitionRegistry->getDataset($request->getDataset());
+        try {
+            $dataset = $this->definitionRegistry->getDataset($request->getDataset());
+        } catch (NoSuchDefinitionException) {
+            // A bad dataset code is a bad request (HTTP 400), never a logged server error; the value is not echoed.
+            throw new InvalidRequestException(new Phrase('The report request refers to an unknown dataset.'));
+        }
 
         if ($checkAcl) {
             $this->datasetAccess->assertAllowed($dataset);

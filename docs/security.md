@@ -39,6 +39,7 @@ A dataset is readable only when **both** gates pass (`Model/Security/DatasetAcce
 | `sales_items` | `MageOS_AdvancedReport::sales` | `Magento_Sales::sales_order` | Order lines; same entity as the order view |
 | `customers` | `MageOS_AdvancedReport::customers` | `Magento_Customer::manage` | Reads customer accounts (birth date, gender, email): needs the core customer permission |
 | `catalog_stock` | `MageOS_AdvancedReport::catalog` | `Magento_Catalog::products` | Same data as the product grid (stock, price, cost) |
+| `search_terms` | `MageOS_AdvancedReport::catalog` | `Magento_Reports::report_search` | Same data as the core Search Terms report |
 | `catalog_salable` | `MageOS_AdvancedReport::catalog` | `Magento_InventoryApi::stock` | MSI stock data; skipped without MSI |
 | `carts` | `MageOS_AdvancedReport::carts` | `Magento_Reports::abandoned` and `Magento_Sales::sales_order` (both required) | Abandoned cart report of core plus the order permission needed for the converted state |
 | `cart_items` | `MageOS_AdvancedReport::carts` | `Magento_Reports::abandoned` and `Magento_Sales::sales_order` (both required) | Same as `carts` |

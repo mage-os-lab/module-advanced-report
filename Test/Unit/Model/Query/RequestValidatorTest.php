@@ -412,6 +412,18 @@ final class RequestValidatorTest extends TestCase
         $this->validator->validate(self::buildRequest(limit: 0));
     }
 
+    public function testItRejectsAnUnknownDatasetAsAnInvalidRequestWithoutEchoingTheCode(): void
+    {
+        $this->definitionRegistry->method('getDataset')->willThrowException(
+            new NoSuchDefinitionException(new Phrase('No such dataset "%1".', ["x' OR 1=1"]))
+        );
+
+        $this->expectException(InvalidRequestException::class);
+        $this->expectExceptionMessage('unknown dataset');
+
+        $this->validator->validate(self::buildRequest());
+    }
+
     public function testItRejectsAnUnknownPreset(): void
     {
         $this->definitionRegistry->method('getDataset')->willReturn(self::salesOrdersDataset());
