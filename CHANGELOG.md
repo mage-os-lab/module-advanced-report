@@ -9,6 +9,7 @@
 - **Request type**: withdrawal before shipment, return after shipment or mixed, decided on the shipments created before the request (delivery is not tracked), with its label resolver; label resolvers for RMA status, reason, resolution and item condition
 - **Definition sources**: `DefinitionSourceInterface` and the `DefinitionRegistry` argument `definitionSources`, to merge datasets and presets loaded only under a condition
 - The return datasets always use the open-period cache TTL
+- **Taxes by country** report (`taxes_by_country`, Sales area): orders, net sales, shipping and taxes by shipping destination country, sorted by taxes
 
 ## [1.0.0] - 2026-11-04
 

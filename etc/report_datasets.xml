@@ -995,6 +995,18 @@
         </chart>
     </preset>
 
+    <preset code="taxes_by_country" area="sales" dataset="sales_orders" label="Taxes by country" description="Taxes charged, with the net sales and shipping they apply to, by shipping destination country." dateRange="last_30_days" sources="mysql">
+        <metric code="orders"/>
+        <metric code="net_sales"/>
+        <metric code="shipping"/>
+        <metric code="taxes"/>
+        <dimension code="shipping_country"/>
+        <sort by="taxes" direction="desc"/>
+        <chart type="horizontalBar">
+            <metric code="taxes"/>
+        </chart>
+    </preset>
+
     <preset code="sales_by_customer_group" area="sales" dataset="sales_orders" label="Sales by customer group" description="Orders, net sales and average order value for each customer group." dateRange="last_30_days" sources="mysql">
         <metric code="orders"/>
         <metric code="net_sales"/>

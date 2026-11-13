@@ -18,6 +18,7 @@ final class SalesPresetsTest extends TestCase
         'sales_by_payment_method',
         'sales_by_shipping_method',
         'sales_by_shipping_country',
+        'taxes_by_country',
         'sales_by_customer_group',
         'new_vs_returning',
         'sales_by_hour',
@@ -59,6 +60,18 @@ final class SalesPresetsTest extends TestCase
         self::assertSame('has_coupon', $preset->filters[0]['field']);
         self::assertSame(FilterOperator::EQ, $preset->filters[0]['operator']);
         self::assertContains($preset->filters[0]['value'], [1, '1', true, ['1'], [1], [true]]);
+    }
+
+    public function testItDeclaresTaxesByShippingCountrySortedByTaxes(): void
+    {
+        $preset = $this->loadReportPresets()['taxes_by_country'];
+
+        self::assertSame(['orders', 'net_sales', 'shipping', 'taxes'], $preset->metrics);
+        self::assertSame('shipping_country', $preset->dimensions[0]['code']);
+        self::assertSame('taxes', $preset->sort[0]['metric']);
+        self::assertSame('desc', $preset->sort[0]['direction']);
+        self::assertSame('horizontalBar', $preset->chart['type'] ?? null);
+        self::assertSame(['taxes'], $preset->chart['metrics'] ?? null);
     }
 
     public function testItPassesDefinitionValidationForEverySalesPreset(): void

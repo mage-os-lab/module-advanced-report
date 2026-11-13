@@ -674,3 +674,5 @@
 "Return after shipment","Return after shipment"
 "Mixed (partly shipped)","Mixed (partly shipped)"
 "Ready-made return reports: return requests, withdrawals before shipment, returns after shipment, reasons, returned products and return rates.","Ready-made return reports: return requests, withdrawals before shipment, returns after shipment, reasons, returned products and return rates."
+"Taxes by country","Taxes by country"
+"Taxes charged, with the net sales and shipping they apply to, by shipping destination country.","Taxes charged, with the net sales and shipping they apply to, by shipping destination country."
