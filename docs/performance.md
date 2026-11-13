@@ -100,7 +100,7 @@ in `app/etc/env.php`). The seed modifies the **main** database: use a developmen
    The concurrency mode **cleans the whole `advanced_report` cache type** (no confirmation) and needs filters that select
    exactly one scenario: `--store=0` selects all stores and `--compare=none` removes the comparison variants, so the example
    above runs `sales_overview:last_30_days:all_stores:none`. The recorded concurrency results used `--preset=sales_by_category`
-   (the `category_12m` scenario). See [`advanced-report:benchmark`](../README.md#advanced-reportbenchmark) for the options.
+   (the `category_12m` scenario). See [`advanced-report:benchmark`](cli.md#advanced-reportbenchmark) for the options.
 
 4. Inspect the plans of the same presets:
 
@@ -316,6 +316,9 @@ each runs the report itself without the lock.
 - **`COUNT(DISTINCT)` customer metrics**: cannot be pre-aggregated or re-aggregated; they need a full pass over the period.
 - **Category fan-out** (`category_id`): one row per product category multiplies the rows to aggregate (R01).
 - **Anti-joins** (`dead_stock`, `never_sold`): one lookup per stock row into `sales_order_item`, served by `SALES_ORDER_ITEM_PRODUCT_ID_ORDER_ID`.
+- **Return reports** (`MageOS_RMA` only): the request type runs correlated lookups of `sales_shipment_item` by
+  `order_item_id` (a column without a native index); `order_returns` and `order_item_returns` run one correlated lookup
+  of the RMA tables per order or order item of the period.
 - **Currency probe** (R37): one indexed `DISTINCT base_currency_code ... LIMIT 2` per period on monetary requests; its cost
   on very large order tables is part of the benchmark (statement counted in `sql_query_count`). Observed: the benchmark does
   not time the probe separately, so its cost is included in the cold medians. The date presets run 3 statements per period

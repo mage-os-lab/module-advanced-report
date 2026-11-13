@@ -90,6 +90,27 @@ formulas of `sales_orders` (same tests, see above); they only feed the derived m
 |---|---|---|---|---|---|
 | `registrations` | `COUNT(customer_id)`: customer accounts created in the range (account `created_at`). | n/a (not order based, no counted statuses). | Additive; 0 when empty. | R15: admin-created accounts (store 0) and accounts of a deleted store are excluded when specific stores are selected. | `Customers/CustomerMetricsTest::testItCountsRegistrationsCreatedInTheRange` |
 
+## Customer dimensions
+
+Five customer dimensions are available on `sales_orders`, `customer_orders` and `customers`.
+
+| Dimension | Label | Source in `sales_orders` / `customer_orders` (order snapshot) | Source in `customers` (account) | Label resolver |
+|---|---|---|---|---|
+| `billing_postcode` | Billing zipcode | Order billing address postcode (trimmed, uppercased) | Default billing address postcode (trimmed, uppercased) | None (raw value) |
+| `birth_year` | Year of birth | Year of the order `customer_dob` | Year of the account `dob` | None (raw value) |
+| `birth_month` | Month of birth | Month of the order `customer_dob` | Month of the account `dob` | `MonthLabelResolver` |
+| `birth_weekday` | Day of the week of birth | Weekday of the order `customer_dob` (0 = Sunday) | Weekday of the account `dob` (0 = Sunday) | `WeekdayLabelResolver` |
+| `gender` | Gender | Order `customer_gender` | Account `gender` | `GenderLabelResolver` |
+
+- Order datasets use the values stored on the order at checkout, not the current account values.
+- Orders placed by guests have no date of birth or gender, so month of birth, weekday of birth and gender show
+  "(none)", while year of birth and zipcode (no label resolver) show an empty cell.
+- Dates of birth are used as stored, without timezone conversion.
+- The five fields are also available in the filter picker (every dataset field is filterable). The gender filter
+  takes raw option ids (1 = Male, 2 = Female, 3 = Not Specified by default).
+- Zipcode and birth values are personal data; birth and gender fields are gated by a field level ACL, see
+  [security](security.md#field-level-acl).
+
 ## `sales_items` (Order items)
 
 Grain: one row per top-level order item (implicit `top_level_item` filter). A configurable product is reported **once on
@@ -334,6 +355,24 @@ An order with a mixed request, or with requests of both types, counts in both `o
 
 Dimensions: `order_date`, `store_id`, `customer_group_id`, `sku`, `parent_sku`, `product_id`, `category_id`.
 `category_id` is a fan-out dimension (R01): totals may not equal the sum of the rows.
+
+### Return presets
+
+| Preset | Dataset | Period / comparison | Shows | Chart |
+|---|---|---|---|---|
+| `returns_overview` | `rma_requests` | last 30 days / previous period | Requests, orders with requests, units, withdrawals, returns after shipment, open and rejected requests, days to request, per day | line |
+| `withdrawals_vs_returns` | `rma_requests` | last 30 days | Requests, units, days from order and from shipment per request type | doughnut |
+| `withdrawals_trend` | `rma_requests` | last 30 days | Withdrawals, returns after shipment, mixed requests and withdrawal share per day | grouped bars |
+| `returns_by_reason` | `rma_requests` | last 30 days | Requests, units, withdrawals and returns after shipment per reason | horizontal bars |
+| `returns_by_status` | `rma_requests` | last 30 days | Requests and units per current status | horizontal bars |
+| `returns_by_resolution` | `rma_requests` | last 30 days | Requests and units per resolution | doughnut |
+| `open_return_requests` | `rma_requests` | last 30 days | Open requests (request number, status, date) with their units | bars per day |
+| `top_returned_products` | `rma_items` | last 30 days | Units, requested value and requests per product (parent SKU, alternate SKU) | horizontal bars |
+| `returns_by_condition` | `rma_items` | last 30 days | Units and requests per item condition | doughnut |
+| `product_return_rate` | `order_item_returns` | last 30 days | Units ordered, units requested and unit return rate per product (parent SKU, alternate SKU) | horizontal bars |
+| `unit_return_rate_trend` | `order_item_returns` | year to date / previous year | Units ordered, units requested and unit return rate per month | line |
+| `order_return_rate` | `order_returns` | year to date / previous year | Orders, orders with requests, requests, rates and orders by type per month | line |
+| `returns_by_shipping_country` | `order_returns` | year to date | Orders, orders with requests and order return rate per shipping country | horizontal bars |
 
 Returns are verified by the unit tests under `Test/Unit/Model/Rma/` (definition source, request type SQL, providers,
 label resolvers); no integration test asserts their values. The raw expressions are in the
