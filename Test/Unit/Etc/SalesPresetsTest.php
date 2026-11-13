@@ -62,12 +62,12 @@ final class SalesPresetsTest extends TestCase
         self::assertContains($preset->filters[0]['value'], [1, '1', true, ['1'], [1], [true]]);
     }
 
-    public function testItDeclaresTaxesByShippingCountrySortedByTaxes(): void
+    public function testItDeclaresTaxesByTaxCountrySortedByTaxes(): void
     {
         $preset = $this->loadReportPresets()['taxes_by_country'];
 
         self::assertSame(['orders', 'net_sales', 'shipping', 'taxes'], $preset->metrics);
-        self::assertSame('shipping_country', $preset->dimensions[0]['code']);
+        self::assertSame('tax_country', $preset->dimensions[0]['code']);
         self::assertSame('taxes', $preset->sort[0]['metric']);
         self::assertSame('desc', $preset->sort[0]['direction']);
         self::assertSame('horizontalBar', $preset->chart['type'] ?? null);
