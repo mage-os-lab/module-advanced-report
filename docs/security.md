@@ -82,7 +82,7 @@ Consequences:
 | `gender` | same | Personal data | Gender segmentation |
 | `customer` (customer key, derived from customer id or email) and the underlying customer id/email columns | `customer_orders` (dimension); `customers` rows come from customer accounts | Personal data (identifying) | Customer ranking and lifetime value |
 | `billing_postcode` | `sales_orders`, `customer_orders`, `customers` | Personal data (location) | Regional analysis |
-| `billing_country`, `shipping_country` | `sales_orders`, `customer_orders`, `customers` | Low (coarse location) | Sales by country |
+| `billing_country`, `shipping_country`, `tax_country` (`sales_orders` only) | `sales_orders`, `customer_orders`, `customers` | Low (coarse location) | Sales by country |
 | `customer_group_id` | `sales_orders`, `customer_orders`, `customers`, `sales_items` | Low (commercial segment) | B2B/B2C and pricing group analysis |
 | `coupon_code` (dimension), `has_coupon` (filter field) | `sales_orders` | Commercial (promotion code, may identify a campaign or partner) | Promotion effectiveness |
 | `payment_method` | `sales_orders` | Commercial | Payment mix |

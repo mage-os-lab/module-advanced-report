@@ -82,6 +82,10 @@
         <field code="shipping_country" label="Shipping country" type="string">
             <mysql expression="shipping_address.country_id" joins="shipping_address"/>
         </field>
+        <field code="tax_country" label="Tax country" type="string"
+               description="Shipping address country, or the billing address country for orders without a shipping address (virtual and downloadable products).">
+            <mysql expression="COALESCE(shipping_address.country_id, billing_address.country_id)" joins="shipping_address,billing_address"/>
+        </field>
         <field code="website_id" label="Website" type="id">
             <mysql expression="store.website_id" joins="store"/>
         </field>
@@ -149,6 +153,8 @@
         <dimension code="billing_country" label="Billing country" field="billing_country"
                    labelResolver="MageOS\AdvancedReport\Model\Label\CountryLabelResolver"/>
         <dimension code="shipping_country" label="Shipping country" field="shipping_country"
+                   labelResolver="MageOS\AdvancedReport\Model\Label\CountryLabelResolver"/>
+        <dimension code="tax_country" label="Tax country" field="tax_country"
                    labelResolver="MageOS\AdvancedReport\Model\Label\CountryLabelResolver"/>
         <dimension code="payment_method" label="Payment method" field="payment_method"
                    labelResolver="MageOS\AdvancedReport\Model\Label\PaymentMethodLabelResolver"/>
@@ -992,6 +998,18 @@
         <sort by="net_sales" direction="desc"/>
         <chart type="horizontalBar">
             <metric code="net_sales"/>
+        </chart>
+    </preset>
+
+    <preset code="taxes_by_country" area="sales" dataset="sales_orders" label="Taxes by country" description="Taxes charged, with the net sales and shipping they apply to, by shipping country (billing country for orders without a shipping address)." dateRange="last_30_days" sources="mysql">
+        <metric code="orders"/>
+        <metric code="net_sales"/>
+        <metric code="shipping"/>
+        <metric code="taxes"/>
+        <dimension code="tax_country"/>
+        <sort by="taxes" direction="desc"/>
+        <chart type="horizontalBar">
+            <metric code="taxes"/>
         </chart>
     </preset>
 

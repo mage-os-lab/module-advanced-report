@@ -674,3 +674,7 @@
 "Return after shipment","Reso dopo la spedizione"
 "Mixed (partly shipped)","Misto (spedito in parte)"
 "Ready-made return reports: return requests, withdrawals before shipment, returns after shipment, reasons, returned products and return rates.","Report predefiniti sui resi: richieste di reso, recessi prima della spedizione, resi dopo la spedizione, motivi, prodotti resi e tassi di reso."
+"Taxes by country","Imposte per paese"
+"Taxes charged, with the net sales and shipping they apply to, by shipping country (billing country for orders without a shipping address).","Imposte addebitate, con le vendite nette e la spedizione su cui si applicano, per paese di spedizione (paese di fatturazione per gli ordini senza indirizzo di spedizione)."
+"Tax country","Paese di imposta"
+"Shipping address country, or the billing address country for orders without a shipping address (virtual and downloadable products).","Paese dell'indirizzo di spedizione, o paese dell'indirizzo di fatturazione per gli ordini senza indirizzo di spedizione (prodotti virtuali e scaricabili)."
