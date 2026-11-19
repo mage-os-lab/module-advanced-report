@@ -64,6 +64,30 @@ class Formula
     }
 
     /**
+     * Whether the formula only adds and subtracts metrics (no literals, products or ratios), so that the
+     * formula of a sum is the sum of the formulas: the value of a whole equals the sum of the values of its parts.
+     */
+    public function isLinear(): bool
+    {
+        return $this->isLinearNode($this->root);
+    }
+
+    /**
+     * @param array<string,mixed> $node
+     */
+    private function isLinearNode(array $node): bool
+    {
+        return match ($node['type']) {
+            'ident' => true,
+            'unary_minus' => $this->isLinearNode($node['operand']),
+            'binary' => \in_array($node['op'], ['+', '-'], true)
+                && $this->isLinearNode($node['left'])
+                && $this->isLinearNode($node['right']),
+            default => false,
+        };
+    }
+
+    /**
      * Evaluates the formula against a map of metric code to value.
      *
      * Returns null if any referenced value is null (or missing) or if a division by zero occurs.

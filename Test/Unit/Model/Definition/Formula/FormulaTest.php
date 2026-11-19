@@ -104,4 +104,14 @@ final class FormulaTest extends TestCase
             $rendered
         );
     }
+
+    public function testItTellsWhetherTheFormulaOnlyAddsAndSubtractsMetrics(): void
+    {
+        self::assertTrue(Formula::fromString('a')->isLinear());
+        self::assertTrue(Formula::fromString('a + b - (c - -d)')->isLinear());
+        self::assertFalse(Formula::fromString('a / b')->isLinear());
+        self::assertFalse(Formula::fromString('a * b')->isLinear());
+        self::assertFalse(Formula::fromString('a + 1')->isLinear());
+        self::assertFalse(Formula::fromString('(a - b) / a')->isLinear());
+    }
 }
