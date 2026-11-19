@@ -90,6 +90,49 @@ define([
     }
 
     /**
+     * The rows of a date dimension in chronological order, whatever the sort of the report (which also orders the
+     * table): dates and periods as text (2026-11-18, 2026-11), date parts as numbers (hour, weekday). Rows without a
+     * value go last. Returns a copy of the result. Only for a single date dimension: other dimensions and results
+     * with several dimensions (ranked lists) keep the report order.
+     *
+     * @param {Object} result
+     * @param {Object} dimension
+     * @return {Object}
+     */
+    function inChronologicalOrder(result, dimension) {
+        var keyOf = function (row) {
+                var value = (row.dims_raw || row.dims)[dimension.code];
+
+                return value === null || value === undefined || value === '' ? null : value;
+            },
+            rows = result.rows.map(function (row, index) {
+                return {row: row, key: keyOf(row), index: index};
+            });
+
+        rows.sort(function (left, right) {
+            var a = left.key,
+                b = right.key;
+
+            if (a === null || b === null) {
+                return a === b ? left.index - right.index : a === null ? 1 : -1;
+            }
+            if (isFinite(a) && isFinite(b)) {
+                return Number(a) - Number(b) || left.index - right.index;
+            }
+            a = String(a);
+            b = String(b);
+
+            return a < b ? -1 : a > b ? 1 : left.index - right.index;
+        });
+
+        return Object.assign({}, result, {
+            rows: rows.map(function (item) {
+                return item.row;
+            })
+        });
+    }
+
+    /**
      * @param {Object} result
      * @param {Object} dimension
      * @param {Boolean} isDate
@@ -156,6 +199,11 @@ define([
 
         if (!dimension || !group || !result.rows.length) {
             return null;
+        }
+        if (isDate && result.columns.filter(function (column) {
+            return column.type === 'dimension';
+        }).length === 1) {
+            result = inChronologicalOrder(result, dimension);
         }
         format = function (value) {
             return formatter.format(value, group.format, context);
