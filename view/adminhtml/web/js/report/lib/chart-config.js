@@ -134,6 +134,61 @@ define([
     }
 
     /**
+     * Chart types that fit the shape of the data, the most fitting first:
+     * - a time series (date dimension with a granularity): line, vertical bars;
+     * - date parts of a date field in their natural order (hour, weekday): vertical bars, line;
+     * - categories, including integer fields such as the month or weekday of birth: horizontal bars, vertical bars,
+     *   plus doughnut and pie when the slices make up a whole, that is with a single dimension whose rows do not
+     *   overlap, an additive metric (sums and counts, not ratios, averages or distinct counts) and no negative value;
+     * - several dimensions (lists): horizontal and vertical bars.
+     * A date dimension without the granularity key (results cached before it existed) counts as a time series, the
+     * line chart these results defaulted to.
+     *
+     * @param {Object} result Advanced Report result.
+     * @param {Object} group Selected metric group.
+     * @return {String[]}
+     */
+    function allowedTypes(result, group) {
+        var dimensions = (result && result.columns || []).filter(function (column) {
+                return column.type === 'dimension';
+            }),
+            dimension = dimensions[0],
+            column = group && group.columns[0],
+            isWhole;
+
+        if (!dimension || !column) {
+            return [];
+        }
+        if (dimensions.length > 1) {
+            return ['horizontalBar', 'bar'];
+        }
+        if (dimension.format === 'date') {
+            return dimension.granularity || !('granularity' in dimension) ? ['line', 'bar'] : ['bar', 'line'];
+        }
+        isWhole = !dimension.nonAdditive && !column.nonAdditive && result.rows.every(function (row) {
+            var value = toNumber(row.metrics[column.code]);
+
+            return value === null || value >= 0;
+        });
+
+        return isWhole ? ['horizontalBar', 'bar', 'doughnut', 'pie'] : ['horizontalBar', 'bar'];
+    }
+
+    /**
+     * The wanted type when it fits the data, otherwise the most fitting one.
+     *
+     * @param {String|null} wanted
+     * @param {Object} result
+     * @param {Object} group
+     * @return {String|null}
+     */
+    function resolveType(wanted, result, group) {
+        var allowed = allowedTypes(result, group);
+
+        return allowed.indexOf(wanted) !== -1 ? wanted : allowed[0] || null;
+    }
+
+    /**
      * @param {Object} chart Chart definition from the view model.
      * @param {Object} result Advanced Report result.
      * @param {Object} group Selected metric group.
@@ -324,6 +379,8 @@ define([
     return {
         PALETTE: PALETTE,
         groupMetrics: groupMetrics,
+        allowedTypes: allowedTypes,
+        resolveType: resolveType,
         build: build
     };
 });

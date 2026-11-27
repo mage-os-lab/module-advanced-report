@@ -7,14 +7,17 @@ namespace MageOS\AdvancedReport\Test\Unit\Model\Query;
 use Magento\Framework\Phrase;
 use Magento\Framework\Phrase\RendererInterface;
 use MageOS\AdvancedReport\Api\Data\ReportRequestInterface;
+use MageOS\AdvancedReport\Model\Definition\AggregateFunction;
 use MageOS\AdvancedReport\Model\Definition\Dataset;
 use MageOS\AdvancedReport\Model\Definition\Dimension;
 use MageOS\AdvancedReport\Model\Definition\Field;
 use MageOS\AdvancedReport\Model\Definition\FieldType;
+use MageOS\AdvancedReport\Model\Definition\Granularity;
 use MageOS\AdvancedReport\Model\Definition\Metric;
 use MageOS\AdvancedReport\Model\Query\ColumnMetadataBuilder;
 use MageOS\AdvancedReport\Model\Query\DimensionSelection;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ColumnMetadataBuilder::class)]
@@ -59,6 +62,8 @@ final class ColumnMetadataBuilderTest extends TestCase
                     format: 'money',
                     hidden: false,
                     lowerIsBetter: false,
+                    aggregate: AggregateFunction::SUM,
+                    fieldCode: 'order_date',
                 ),
                 'returns' => new Metric(
                     code: 'returns',
@@ -67,6 +72,8 @@ final class ColumnMetadataBuilderTest extends TestCase
                     format: 'money',
                     hidden: false,
                     lowerIsBetter: true,
+                    aggregate: AggregateFunction::SUM,
+                    fieldCode: 'order_date',
                 ),
             ],
             dimensions: [
@@ -78,7 +85,7 @@ final class ColumnMetadataBuilderTest extends TestCase
         $request = $this->createStub(ReportRequestInterface::class);
         $request->method('getDimensions')->willReturn([
             new DimensionSelection('store_id'),
-            new DimensionSelection('order_date'),
+            new DimensionSelection('order_date', Granularity::DAY),
         ]);
         $request->method('getMetrics')->willReturn(['returns', 'net_sales']);
 
@@ -95,6 +102,7 @@ final class ColumnMetadataBuilderTest extends TestCase
                     'description' => null,
                     'nonAdditive' => true,
                     'lowerIsBetter' => false,
+                    'granularity' => null,
                 ],
                 [
                     'code' => 'order_date',
@@ -104,6 +112,7 @@ final class ColumnMetadataBuilderTest extends TestCase
                     'description' => 'The order date.',
                     'nonAdditive' => false,
                     'lowerIsBetter' => false,
+                    'granularity' => 'day',
                 ],
                 [
                     'code' => 'returns',
@@ -185,5 +194,97 @@ final class ColumnMetadataBuilderTest extends TestCase
         self::assertSame('IT:Sales net of tax and shipping.', $columns[1]['description']);
         self::assertSame('IT:Returns', $columns[2]['label']);
         self::assertNull($columns[2]['description']);
+    }
+
+    /**
+     * @return array<string,array{0: string, 1: bool}>
+     */
+    public static function additivityProvider(): array
+    {
+        return [
+            'sum' => ['revenue', false],
+            'count' => ['orders', false],
+            'count distinct' => ['customers', true],
+            'average' => ['avg_items', true],
+            'minimum' => ['first_order', true],
+            'sum and difference of additive metrics' => ['net', false],
+            'formula over a linear formula' => ['net_with_orders', false],
+            'ratio' => ['aov', true],
+            'product with a literal' => ['revenue_cents', true],
+            'difference with a non additive metric' => ['revenue_minus_customers', true],
+            'unknown reference' => ['broken', true],
+            'cycle' => ['loop_a', true],
+            'virtual' => ['virtual_metric', true],
+        ];
+    }
+
+    #[DataProvider('additivityProvider')]
+    public function testItFlagsMetricsWhoseRowsDoNotAddUp(string $metric, bool $nonAdditive): void
+    {
+        $aggregate = static fn (string $code, AggregateFunction $function): Metric => new Metric(
+            code: $code,
+            label: $code,
+            description: null,
+            format: 'number',
+            hidden: false,
+            lowerIsBetter: false,
+            aggregate: $function,
+            fieldCode: 'value',
+        );
+        $formula = static fn (string $code, string $expression): Metric => new Metric(
+            code: $code,
+            label: $code,
+            description: null,
+            format: 'number',
+            hidden: false,
+            lowerIsBetter: false,
+            formula: $expression,
+        );
+        $metrics = [
+            $aggregate('revenue', AggregateFunction::SUM),
+            $aggregate('orders', AggregateFunction::COUNT),
+            $aggregate('customers', AggregateFunction::COUNT_DISTINCT),
+            $aggregate('avg_items', AggregateFunction::AVG),
+            $aggregate('first_order', AggregateFunction::MIN),
+            $formula('net', 'revenue - (orders + -revenue)'),
+            $formula('net_with_orders', 'net + orders'),
+            $formula('aov', 'revenue / orders'),
+            $formula('revenue_cents', 'revenue * 100'),
+            $formula('revenue_minus_customers', 'revenue - customers'),
+            $formula('broken', 'revenue + missing'),
+            $formula('loop_a', 'loop_b + revenue'),
+            $formula('loop_b', 'loop_a + revenue'),
+            new Metric(
+                code: 'virtual_metric',
+                label: 'virtual_metric',
+                description: null,
+                format: 'number',
+                hidden: false,
+                lowerIsBetter: false,
+                virtual: true,
+            ),
+        ];
+        $dataset = new Dataset(
+            code: 'test',
+            label: 'Test',
+            aclResource: 'MageOS_AdvancedReport::sales',
+            area: 'sales',
+            dateless: true,
+            baseTable: 'test',
+            baseAlias: 'main',
+            baseProvider: null,
+            implicitFilters: [],
+            fields: [],
+            joins: [],
+            metrics: array_combine(array_map(static fn (Metric $item): string => $item->code, $metrics), $metrics),
+            dimensions: [],
+        );
+        $request = $this->createStub(ReportRequestInterface::class);
+        $request->method('getDimensions')->willReturn([]);
+        $request->method('getMetrics')->willReturn([$metric]);
+
+        $columns = (new ColumnMetadataBuilder())->build($dataset, $request);
+
+        self::assertSame($nonAdditive, $columns[0]['nonAdditive']);
     }
 }

@@ -23,7 +23,8 @@ final readonly class ReportResult implements ReportResultInterface
      *     format: ?string,
      *     description: ?string,
      *     nonAdditive: bool,
-     *     lowerIsBetter: bool
+     *     lowerIsBetter: bool,
+     *     granularity?: ?string
      * }> $columns
      * @param array<int,array<string,mixed>> $rows
      * @param array<string,mixed> $totals

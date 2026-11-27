@@ -1,7 +1,8 @@
 /**
  * Chart child of the exploration app. Draws with the shared chart configuration: the preset chart definition while
  * the report keeps its default dimensions, otherwise the first dimension and metric. The type can be changed from the
- * chart card for the current page.
+ * chart card for the current page, among the types that fit the data (chartConfig.allowedTypes): a choice that no
+ * longer fits, after a change of dimension or metric, falls back to the default type.
  */
 define([
     'jquery',
@@ -51,6 +52,13 @@ define([
      */
     return function (app) {
         const preset = app.config.chart,
+            allTypeOptions = [
+                {value: 'line', label: $t('Line')},
+                {value: 'bar', label: $t('Vertical bars')},
+                {value: 'horizontalBar', label: $t('Horizontal bars')},
+                {value: 'doughnut', label: $t('Doughnut')},
+                {value: 'pie', label: $t('Pie')}
+            ],
             selectedType = ko.observable(null),
             groupIndex = ko.observable(0),
             ownResult = ko.observable(null),
@@ -95,29 +103,41 @@ define([
             activeIndex = ko.pureComputed(function () {
                 return groups()[groupIndex()] ? groupIndex() : 0;
             }),
-            defaultType = ko.pureComputed(function () {
+            allowedTypes = ko.pureComputed(function () {
                 const result = drawn(),
-                    dimension = result && result.columns.find(function (column) {
-                        return column.type === 'dimension';
-                    });
+                    group = groups()[activeIndex()];
 
-                if (usesPresetChart()) {
+                return result && group ? chartConfig.allowedTypes(result, group) : [];
+            }),
+            defaultType = ko.pureComputed(function () {
+                const allowed = allowedTypes();
+
+                if (usesPresetChart() && allowed.indexOf(preset.type) !== -1) {
                     return preset.type;
                 }
 
-                return dimension && dimension.format === 'date' ? 'line' : 'horizontalBar';
+                return allowed[0] || null;
             }),
             type = ko.pureComputed({
                 read: function () {
-                    return selectedType() || defaultType();
+                    const selected = selectedType();
+
+                    return selected && allowedTypes().indexOf(selected) !== -1 ? selected : defaultType();
                 },
                 write: selectedType
+            }),
+            typeOptions = ko.pureComputed(function () {
+                const allowed = allowedTypes();
+
+                return allTypeOptions.filter(function (option) {
+                    return allowed.indexOf(option.value) !== -1;
+                });
             }),
             config = ko.pureComputed(function () {
                 const result = drawn(),
                     group = groups()[activeIndex()];
 
-                return result && group ? chartConfig.build({type: type()}, result, group, app.locale) : null;
+                return result && group && type() ? chartConfig.build({type: type()}, result, group, app.locale) : null;
             });
         let inflight = null;
 
@@ -163,13 +183,7 @@ define([
         return {
             html: template,
             type: type,
-            typeOptions: [
-                {value: 'line', label: $t('Line')},
-                {value: 'bar', label: $t('Vertical bars')},
-                {value: 'horizontalBar', label: $t('Horizontal bars')},
-                {value: 'doughnut', label: $t('Doughnut')},
-                {value: 'pie', label: $t('Pie')}
-            ],
+            typeOptions: typeOptions,
             labels: {chartType: $t('Chart type')},
             groups: groups,
             groupIndex: groupIndex,
