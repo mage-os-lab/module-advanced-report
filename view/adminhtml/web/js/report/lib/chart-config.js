@@ -136,12 +136,13 @@ define([
     /**
      * Chart types that fit the shape of the data, the most fitting first:
      * - a time series (date dimension with a granularity): line, vertical bars;
-     * - date parts in their natural order (hour, weekday, month of birth): vertical bars, line;
-     * - categories: horizontal bars, vertical bars, plus doughnut and pie when the slices make up a whole, that is
-     *   with a single dimension whose rows do not overlap, an additive metric (sums and counts, not ratios,
-     *   averages or distinct counts) and no negative value;
+     * - date parts of a date field in their natural order (hour, weekday): vertical bars, line;
+     * - categories, including integer fields such as the month or weekday of birth: horizontal bars, vertical bars,
+     *   plus doughnut and pie when the slices make up a whole, that is with a single dimension whose rows do not
+     *   overlap, an additive metric (sums and counts, not ratios, averages or distinct counts) and no negative value;
      * - several dimensions (lists): horizontal and vertical bars.
-     * Columns without the nonAdditive flag (results cached before it existed) count as additive.
+     * A date dimension without the granularity key (results cached before it existed) counts as a time series, the
+     * line chart these results defaulted to.
      *
      * @param {Object} result Advanced Report result.
      * @param {Object} group Selected metric group.
@@ -162,7 +163,7 @@ define([
             return ['horizontalBar', 'bar'];
         }
         if (dimension.format === 'date') {
-            return dimension.granularity ? ['line', 'bar'] : ['bar', 'line'];
+            return dimension.granularity || !('granularity' in dimension) ? ['line', 'bar'] : ['bar', 'line'];
         }
         isWhole = !dimension.nonAdditive && !column.nonAdditive && result.rows.every(function (row) {
             var value = toNumber(row.metrics[column.code]);
